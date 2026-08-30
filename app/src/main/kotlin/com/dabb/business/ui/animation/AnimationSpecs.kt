@@ -18,6 +18,12 @@ object AnimationSpecs {
     val SCREEN_EXIT = tween<Float>(durationMillis = 350,
         easing = androidx.compose.animation.core.FastOutSlowInEasing)
 
+    // إزاحة الانزلاق — IntOffset (الموضع) بنفس المدة
+    val SCREEN_ENTER_OFFSET = tween<IntOffset>(durationMillis = 650,
+        easing = androidx.compose.animation.core.FastOutSlowInEasing)
+    val SCREEN_EXIT_OFFSET = tween<IntOffset>(durationMillis = 350,
+        easing = androidx.compose.animation.core.FastOutSlowInEasing)
+
     // تقليب البطاقة — بطيء قليلاً لإاحساس بالقوة
     val FLIP = tween<Float>(durationMillis = 800,
         easing = androidx.compose.animation.core.LinearOutSlowInEasing)

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- أيقونة: أسطوانة غاز بيضاء مع لهب ذهبي -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- رأس الأسطوانة -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M50,24h8v8h-8z" />
+    <!-- جسم الأسطوانة -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M42,34h24c2.2,0 4,1.8 4,4v44c0,2.2 -1.8,4 -4,4h-24c-2.2,0 -4,-1.8 -4,-4v-44c0,-2.2 1.8,-4 4,-4z" />
+    <!-- لهب -->
+    <path
+        android:fillColor="#E5A843"
+        android:pathData="M54,46c4,5 7,7.5 7,11.5c0,3.9 -3.1,7 -7,7s-7,-3.1 -7,-7c0,-4 3,-6.5 7,-11.5z" />
+</vector>

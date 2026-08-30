@@ -9,7 +9,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotateY
 import androidx.compose.ui.graphics.graphicsLayer
 
 /**
@@ -32,7 +31,7 @@ fun FlippableCard(
     Box(
         modifier = modifier
             .graphicsLayer {
-                rotationY = rotationY
+                this.rotationY = rotationY
                 cameraDistance = 8 * density
             }
     ) {
@@ -40,7 +39,7 @@ fun FlippableCard(
             front()
         } else {
             // عند التقليب الكامل نعرض الوجه الخلفي مع تدوير مضاد لإصلاح الاتجاه
-            Box(modifier = Modifier.rotateY(180f)) {
+            Box(modifier = Modifier.graphicsLayer { this.rotationY = 180f }) {
                 back()
             }
         }

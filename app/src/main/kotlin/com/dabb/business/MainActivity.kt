@@ -6,9 +6,10 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.dabb.business.ui.animation.animatedComposable
 import com.dabb.business.ui.screens.DispenseScreen
 import com.dabb.business.ui.screens.InventoryScreen
 import com.dabb.business.ui.screens.ReportsScreen
@@ -32,21 +33,22 @@ fun AppNavigation() {
         NavHost(
             navController = navController,
             startDestination = "inventory",
-            modifier = androidx.compose.ui.Modifier.padding(padding)
+            modifier = Modifier.padding(padding)
         ) {
-            composable("inventory") {
+            // انتقالات الشاشات: انزلاق من الأسفل + تلاشي (المعرض #75 / #76)
+            animatedComposable("inventory") {
                 InventoryScreen(
                     onNavigateToDispense = { navController.navigate("dispense") },
                     onNavigateToReports = { navController.navigate("reports") }
                 )
             }
-            composable("dispense") {
+            animatedComposable("dispense") {
                 DispenseScreen(
                     onBack = { navController.popBackStack() },
                     onSaleRecorded = { navController.popBackStack() }
                 )
             }
-            composable("reports") {
+            animatedComposable("reports") {
                 ReportsScreen()
             }
         }

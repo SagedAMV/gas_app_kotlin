@@ -1,6 +1,7 @@
 package com.dabb.business.ui.animation
 
 import androidx.compose.animation.*
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavGraphBuilder
@@ -18,25 +19,25 @@ fun NavGraphBuilder.animatedComposable(
         route = route,
         enterTransition = {
             slideInVertically(
-                animationSpec = AnimationSpecs.SCREEN_ENTER,
+                animationSpec = AnimationSpecs.SCREEN_ENTER_OFFSET,
                 initialOffsetY = { it }
             ) + fadeIn(animationSpec = AnimationSpecs.SCREEN_ENTER)
         },
         exitTransition = {
             slideOutVertically(
-                animationSpec = AnimationSpecs.SCREEN_EXIT,
+                animationSpec = AnimationSpecs.SCREEN_EXIT_OFFSET,
                 targetOffsetY = { -it / 3 }
             ) + fadeOut(animationSpec = AnimationSpecs.SCREEN_EXIT)
         },
         popEnterTransition = {
             slideInVertically(
-                animationSpec = AnimationSpecs.SCREEN_ENTER,
+                animationSpec = AnimationSpecs.SCREEN_ENTER_OFFSET,
                 initialOffsetY = { -it / 3 }
             ) + fadeIn(animationSpec = AnimationSpecs.SCREEN_ENTER)
         },
         popExitTransition = {
             slideOutVertically(
-                animationSpec = AnimationSpecs.SCREEN_EXIT,
+                animationSpec = AnimationSpecs.SCREEN_EXIT_OFFSET,
                 targetOffsetY = { it }
             ) + fadeOut(animationSpec = AnimationSpecs.SCREEN_EXIT)
         }
