@@ -240,7 +240,7 @@ fun ReportsScreen() {
                                 .padding(18.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Text("لا توجد ديون حالياً 🎉".replace(" 🎉", ""), style = MaterialTheme.typography.titleSmall)
+                            Text("لا توجد ديون حالياً", style = MaterialTheme.typography.titleSmall)
                             Text(
                                 "كل الزبائن سدّدوا — عمل رائع!",
                                 style = MaterialTheme.typography.bodySmall,
