@@ -13,12 +13,43 @@ interface SaleDao {
     @Query("SELECT * FROM sales WHERE customerId = :id ORDER BY saleDate DESC")
     suspend fun getByCustomer(id: String): List<SaleEntity>
 
-    @Query("SELECT SUM(amountPaid) FROM sales")
-    suspend fun getTotalPaid(): Double?
-
-    @Query("SELECT SUM(totalAmount - amountPaid) FROM sales WHERE status = 'CREDIT'")
-    suspend fun getTotalCredit(): Double?
-
     @Query("SELECT * FROM sales ORDER BY saleDate DESC")
     suspend fun getAll(): List<SaleEntity>
+
+    @Query("SELECT * FROM sales WHERE saleDate >= :from ORDER BY saleDate DESC")
+    suspend fun getSince(from: Long): List<SaleEntity>
+
+    @Query("SELECT * FROM sales WHERE id = :id")
+    suspend fun getById(id: String): SaleEntity?
+
+    @Query("DELETE FROM sales WHERE id = :id")
+    suspend fun deleteById(id: String): Int
+
+    // ===== المجاميع الكلية =====
+    @Query("SELECT COALESCE(SUM(totalAmount),0) FROM sales")
+    suspend fun getTotalSales(): Long
+
+    @Query("SELECT COALESCE(SUM(amountPaid),0) FROM sales")
+    suspend fun getSaleAmountPaid(): Long
+
+    // ===== المجاميع خلال فترة =====
+    @Query("SELECT COALESCE(SUM(totalAmount),0) FROM sales WHERE saleDate >= :from")
+    suspend fun getTotalSalesSince(from: Long): Long
+
+    @Query("SELECT COALESCE(SUM(amountPaid),0) FROM sales WHERE saleDate >= :from")
+    suspend fun getSalePaidSince(from: Long): Long
+
+    // ===== رصيد زبون واحد (مصدر الحقيقة المشتق) =====
+    @Query(
+        "SELECT COALESCE((SELECT SUM(totalAmount) FROM sales WHERE customerId = :id),0) " +
+        "- COALESCE((SELECT SUM(amountPaid) FROM sales WHERE customerId = :id),0) " +
+        "- COALESCE((SELECT SUM(amount) FROM payments WHERE customerId = :id),0)"
+    )
+    suspend fun getCustomerBalance(id: String): Long
+
+    @Query("SELECT COALESCE(SUM(totalAmount),0) FROM sales WHERE customerId = :id")
+    suspend fun getCustomerSalesTotal(id: String): Long
+
+    @Query("SELECT COALESCE(SUM(amountPaid),0) FROM sales WHERE customerId = :id")
+    suspend fun getCustomerSalePaid(id: String): Long
 }

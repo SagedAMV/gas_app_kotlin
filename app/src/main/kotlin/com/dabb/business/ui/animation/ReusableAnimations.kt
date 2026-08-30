@@ -73,7 +73,7 @@ fun AnimatedNumber(
     )
 }
 
-/** مبلغ يعدّ تصاعدياً بالجنيه (من المعرض #97) */
+/** مبلغ يعدّ تصاعدياً بالريال (من المعرض #97) */
 @Composable
 fun AnimatedMoney(
     value: Double,

@@ -3,17 +3,19 @@ package com.dabb.business.model
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
+/**
+ * زبون. totalDebt/totalPaid بالقروش ككاش يُعاد حسابه من المعاملات داخل
+ * معاملة واحدة، والمصدر الموثوق للرصيد هو المجاميع المشتقة في SaleDao/PaymentDao.
+ */
 @Entity(tableName = "customers")
 data class CustomerEntity(
     @PrimaryKey val id: String,
     val name: String = "",
     val phone: String = "",
-    val totalDebt: Double = 0.0,
-    val totalPaid: Double = 0.0,
+    val totalDebt: Long = 0L,
+    val totalPaid: Long = 0L,
     val createdAt: Long = 0L
 ) {
-    /**
-     * رصيد الزبون — يتم حسابه من البيانات مباشرة
-     */
-    fun currentBalance(): Double = totalDebt - totalPaid
+    /** الرصيد المتبقي (دَين) بالقروش. */
+    fun balancePiasters(): Long = totalDebt - totalPaid
 }
