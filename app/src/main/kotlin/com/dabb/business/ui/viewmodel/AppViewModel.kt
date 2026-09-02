@@ -1,6 +1,7 @@
 package com.dabb.business.ui.viewmodel
 
 import android.app.Application
+import android.content.Intent
 import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -21,7 +22,9 @@ import com.dabb.business.model.StationPurchaseEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** فترة التقرير الزمنية. */
 enum class ReportPeriod(val label: String) {
@@ -39,14 +42,25 @@ enum class ReportPeriod(val label: String) {
  * ViewModel موحّد. كل عملية مالية/مخزونية داخل withTransaction واحدة:
  * إمّا تنجح كاملة أو تُلغى كاملة. كل المبالغ بالقروش (Long).
  */
-class AppViewModel(app: Application) : AndroidViewModel(app) {
-    private val db = AppDatabase.getInstance(app.applicationContext)
+class AppViewModel internal constructor(
+    app: Application,
+    private val db: AppDatabase,
+    private val settings: SettingsStore
+) : AndroidViewModel(app) {
+
+    /** الباني العام للشاشات — قاعدة البيانات الحقيقية + الإعدادات.
+     *  (الداخلي يسمح للاختبارات بحقن قاعدة في الذاكرة — المشكلة 17). */
+    constructor(app: Application) : this(
+        app,
+        AppDatabase.getInstance(app.applicationContext),
+        SettingsStore(app.applicationContext)
+    )
+
     private val cylDao = db.cylinderDao()
     private val custDao = db.customerDao()
     private val saleDao = db.saleDao()
     private val payDao = db.paymentDao()
     private val stationDao = db.stationDao()
-    private val settings = SettingsStore(app.applicationContext)
 
     // المخزون
     var availableCount by mutableStateOf(0); private set
@@ -114,10 +128,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun refreshRecent() = launch {
         val from = reportPeriod.startMillis()
-        val list = if (from == 0L) saleDao.getAll() else saleDao.getSince(from)
+        // إصلاح المشكلة 13: تُحمَّل صفحة أولى فقط بدل الجدول كاملاً — بلا خطر OOM.
+        val list = if (from == 0L) saleDao.getPaged(50, 0) else saleDao.getSince(from)
         allSales = list
         recentSales = list.take(6)
     }
+
+    /** صفحة من المبيعات لسجل المبيعات الكامل (المشكلة 13). */
+    suspend fun getSalesPaged(limit: Int, offset: Int): List<SaleEntity> =
+        saleDao.getPaged(limit, offset)
+
+    suspend fun getSalesCount(): Int = saleDao.getCount()
 
     fun refreshDebtors() = launch { topDebtors = custDao.getCustomersWithDebt().take(3) }
 
@@ -194,12 +215,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val existing = custDao.getById(customer.id) ?: custDao.findByName(customer.name.trim())
             val custId = existing?.id ?: customer.id
             val base = existing ?: customer
+            // طابع زمني موحّد للأسطوانات والبيع — أساس المطابقة الدقيقة عند الإلغاء (المشكلة 2)
+            val now = System.currentTimeMillis()
 
             db.withTransaction {
+                // إصلاح المشكلة 1: الزبون الجديد القادم من شاشة الصرف كان لا يُحفظ —
+                // الآن يُنشأ داخل نفس المعاملة قبل أي عملية تعتمد عليه.
+                if (existing == null) {
+                    custDao.insertOrUpdate(base.copy(createdAt = now))
+                }
                 val toSell = cylDao.getAvailable(units)
                 check(toSell.size == units) { "تعذّر تخصيص الأسطوانات — أعد المحاولة" }
                 val ids = toSell.map { it.id }
-                val updated = cylDao.markSoldByQuantity(units, System.currentTimeMillis())
+                val updated = cylDao.markSoldByQuantity(units, now)
                 check(updated == units) { "تعذّر خصم المخزون — أعد المحاولة" }
 
                 val amount = units.toLong() * pricePiasters
@@ -215,7 +243,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         totalAmount = amount,
                         amountPaid = amountPaid,
                         status = if (payNow) SaleStatus.PAID else SaleStatus.CREDIT,
-                        saleDate = System.currentTimeMillis(),
+                        saleDate = now,
                         notes = notes.trim()
                     )
                 )
@@ -268,8 +296,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         runOp(onResult) {
             val sale = saleDao.getById(saleId) ?: error("البيع غير موجود")
             db.withTransaction {
+                // إصلاح المشكلة 3: منع الإلغاء إذا وُجدت تحصيلات لاحقة لنفس الزبون —
+                // وإلا فقد الزبون نقداً دُفع مقابل بيع اختفى من السجلات.
+                val laterPayment = payDao.getByCustomer(sale.customerId)
+                    .any { it.paymentDate > sale.saleDate }
+                if (laterPayment)
+                    error("يوجد تحصيلات لاحقة على هذا البيع. ألغِ التحصيلات أولاً ثم ألغِ البيع.")
                 val ids = sale.cylinderIdsJson.split(",").filter { it.isNotBlank() }
-                if (ids.isNotEmpty()) cylDao.markAvailable(ids)
+                // إصلاح المشكلة 2: تُعاد فقط الأسطوانات ما زالت معلّمة بهذا البيع
+                // (مطابقة soldDate) — أسطوانة أُعيد بيعها لاحقاً لا تُمس.
+                if (ids.isNotEmpty()) cylDao.markAvailable(ids, sale.saleDate)
                 saleDao.deleteById(saleId)
                 recomputeCustomer(sale.customerId)
             }
@@ -333,6 +369,36 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * إصلاح المشكلة 11: إلغاء سحب من المحطة — يُسمح فقط إذا كانت أسطواناته
+     * ما زالت في المخزون (لم تُبَع بعد)، وتُحذف الأسطوانات مع سجل السحب
+     * داخل معاملة واحدة حتى لا يختل الرصيد.
+     */
+    fun cancelStationPurchase(purchaseId: String, onResult: (String?) -> Unit = {}) = launch {
+        runOp(onResult) {
+            val p = stationDao.getPurchaseById(purchaseId) ?: error("السحب غير موجود")
+            db.withTransaction {
+                val ids = cylDao.getAvailableIdsByAcquiredDate(p.purchaseDate, p.units)
+                if (ids.size < p.units)
+                    error("لا يمكن الإلغاء — بعض أسطوانات هذا السحب بِيعت بالفعل. ألغِ تلك المبيعات أولاً.")
+                cylDao.deleteByIds(ids)
+                stationDao.deletePurchaseById(purchaseId)
+            }
+            refreshAll()
+        }
+    }
+
+    /** إصلاح المشكلة 11: إلغاء تسديد للمحطة — يعود المبلغ ديناً على المحل. */
+    fun cancelStationPayment(paymentId: String, onResult: (String?) -> Unit = {}) = launch {
+        runOp(onResult) {
+            stationDao.getPaymentById(paymentId) ?: error("التسديد غير موجود")
+            db.withTransaction {
+                stationDao.deletePaymentById(paymentId)
+            }
+            refreshAll()
+        }
+    }
+
     suspend fun getStationData(): StationData {
         val purchases = stationDao.getPurchases()
         val payments = stationDao.getPayments()
@@ -356,10 +422,22 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     suspend fun importDatabase(uri: Uri): String? = withContext(Dispatchers.IO) {
         runCatching {
             val ctx = getApplication<Application>()
+            // إصلاح المشكلة 4: إغلاق القاعدة وتصفير الـ Singleton قبل أي كتابة —
+            // النسخ فوق قاعدة مفتوحة يفسد الملف.
+            AppDatabase.shutdown()
             val dst = ctx.getDatabasePath(AppDatabase.DB_NAME)
+            // القاعدة تعمل بوضع WAL — حذف الملفين المساعدين وإلا أُفسدت النسخة الجديدة.
+            File(dst.path + "-wal").delete()
+            File(dst.path + "-shm").delete()
             ctx.contentResolver.openInputStream(uri)?.use { input ->
                 dst.outputStream().use { input.copyTo(it) }
             } ?: error("تعذّر فتح ملف النسخة")
+            // إعادة تشغيل التطبيق ليفتح القاعدة الجديدة من الصفر بحالة نظيفة.
+            val intent = ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)?.apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+            } ?: error("تعذّر تحضير إعادة التشغيل")
+            ctx.startActivity(intent)
+            Runtime.getRuntime().exitProcess(0)
         }.exceptionOrNull()?.message
     }
 
@@ -385,13 +463,23 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** حاجز تزامن ذرّي: يمنع تشغيل عمليتين معدِّلتين معاً (إصلاح المشكلة 15).
+     *  mutableStateOf وحده لا يكفي — الضغطتان السريعان كانتا تتجاوزانه. */
+    private val opRunning = AtomicBoolean(false)
+
     private suspend fun runOp(onResult: (String?) -> Unit, block: suspend () -> Unit) {
+        if (!opRunning.compareAndSet(false, true)) {
+            onResult("توجد عملية قيد التنفيذ — انتظر لحظة")
+            return
+        }
         var err: String? = null
         try {
             block()
         } catch (t: Throwable) {
             err = t.message ?: "حدث خطأ"
             errorMessage = err
+        } finally {
+            opRunning.set(false)
         }
         onResult(err)
     }

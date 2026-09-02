@@ -42,4 +42,17 @@ interface StationDao {
         "- COALESCE((SELECT SUM(amount) FROM station_payments),0)"
     )
     suspend fun getStationBalance(): Long
+
+    // ===== إلغاء عمليات المحطة (إصلاح المشكلة 11) =====
+    @Query("SELECT * FROM station_purchases WHERE id = :id")
+    suspend fun getPurchaseById(id: String): StationPurchaseEntity?
+
+    @Query("DELETE FROM station_purchases WHERE id = :id")
+    suspend fun deletePurchaseById(id: String): Int
+
+    @Query("SELECT * FROM station_payments WHERE id = :id")
+    suspend fun getPaymentById(id: String): StationPaymentEntity?
+
+    @Query("DELETE FROM station_payments WHERE id = :id")
+    suspend fun deletePaymentById(id: String): Int
 }

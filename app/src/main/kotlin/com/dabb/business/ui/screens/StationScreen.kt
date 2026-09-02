@@ -6,9 +6,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.LocalGasStation
 import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.Payments
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -34,6 +36,10 @@ fun StationScreen() {
     var showIntake by remember { mutableStateOf(false) }
     var showPay by remember { mutableStateOf(false) }
     var refreshKey by remember { mutableIntStateOf(0) }
+    // إصلاح المشكلة 11: إلغاء سحب/تسديد خاطئ
+    var confirmCancelPurchase by remember { mutableStateOf<StationPurchaseEntity?>(null) }
+    var confirmCancelPayment by remember { mutableStateOf<StationPaymentEntity?>(null) }
+    var opError by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(refreshKey) { data = viewModel.getStationData() }
     val d = data
@@ -94,7 +100,7 @@ fun StationScreen() {
                     val purchases = d?.purchases ?: emptyList()
                     if (purchases.isEmpty()) EmptyHint("لا يوجد سحب من المحطة بعد")
                     else purchases.take(30).forEachIndexed { i, p ->
-                        PurchaseRow(p)
+                        PurchaseRow(p, onCancel = { confirmCancelPurchase = p })
                         if (i < purchases.lastIndex && i < 29) DividerSoft()
                     }
                 }
@@ -107,7 +113,7 @@ fun StationScreen() {
                     val payments = d?.payments ?: emptyList()
                     if (payments.isEmpty()) EmptyHint("لم تُسدّد أي دفعة للمحطة بعد")
                     else payments.take(30).forEachIndexed { i, p ->
-                        StationPaymentRow(p)
+                        StationPaymentRow(p, onCancel = { confirmCancelPayment = p })
                         if (i < payments.lastIndex && i < 29) DividerSoft()
                     }
                 }
@@ -141,10 +147,66 @@ fun StationScreen() {
             }
         )
     }
+
+    opError?.let { msg ->
+        // يُعرض داخل نافذة حوارية بسيطة — لا يفسد تخطيط الشاشة
+        AlertDialog(
+            onDismissRequest = { opError = null },
+            shape = RoundedCornerShape(20.dp),
+            icon = { Icon(Icons.Filled.Warning, null, tint = MaterialTheme.colorScheme.error) },
+            title = { Text("تعذّر الإلغاء") },
+            text = { Text(msg) },
+            confirmButton = { TextButton(onClick = { opError = null }) { Text("حسناً") } }
+        )
+    }
+
+    // إصلاح المشكلة 11: تأكيد إلغاء سحب من المحطة
+    confirmCancelPurchase?.let { p ->
+        AlertDialog(
+            onDismissRequest = { confirmCancelPurchase = null },
+            shape = RoundedCornerShape(20.dp),
+            title = { Text("إلغاء هذا السحب؟") },
+            text = { Text("سيُحذف سجل السحب (${p.units} أسطوانة · ${Money.format(p.totalAmount)} ريال) وتُحذف أسطواناته من المخزون — يُسمح فقط إذا لم تُبَع أيٌّ منها.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch {
+                        viewModel.cancelStationPurchase(p.id) { err ->
+                            confirmCancelPurchase = null
+                            opError = err
+                            refreshKey++
+                        }
+                    }
+                }) { Text("نعم، إلغاء", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = { TextButton(onClick = { confirmCancelPurchase = null }) { Text("تراجع") } }
+        )
+    }
+
+    // إصلاح المشكلة 11: تأكيد إلغاء تسديد للمحطة
+    confirmCancelPayment?.let { p ->
+        AlertDialog(
+            onDismissRequest = { confirmCancelPayment = null },
+            shape = RoundedCornerShape(20.dp),
+            title = { Text("إلغاء هذا التسديد؟") },
+            text = { Text("سيعود المبلغ (${Money.format(p.amount)} ريال) ديناً على المحل للمحطة.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch {
+                        viewModel.cancelStationPayment(p.id) { err ->
+                            confirmCancelPayment = null
+                            opError = err
+                            refreshKey++
+                        }
+                    }
+                }) { Text("نعم، إلغاء", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = { TextButton(onClick = { confirmCancelPayment = null }) { Text("تراجع") } }
+        )
+    }
 }
 
 @Composable
-private fun PurchaseRow(p: StationPurchaseEntity) {
+private fun PurchaseRow(p: StationPurchaseEntity, onCancel: () -> Unit = {}) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
         Icon(Icons.Filled.LocalShipping, null, tint = MaterialTheme.colorScheme.primary,
@@ -162,11 +224,15 @@ private fun PurchaseRow(p: StationPurchaseEntity) {
                 Text("آجل ${Money.format(p.totalAmount - p.amountPaid)}",
                     style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
         }
+        IconButton(onClick = onCancel) {
+            Icon(Icons.Filled.Delete, "إلغاء السحب",
+                tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+        }
     }
 }
 
 @Composable
-private fun StationPaymentRow(p: StationPaymentEntity) {
+private fun StationPaymentRow(p: StationPaymentEntity, onCancel: () -> Unit = {}) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
         Icon(Icons.Filled.Payments, null, tint = MaterialTheme.colorScheme.primary,
@@ -179,5 +245,9 @@ private fun StationPaymentRow(p: StationPaymentEntity) {
         }
         Text("−${Money.format(p.amount)} ريال", style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.primary)
+        IconButton(onClick = onCancel) {
+            Icon(Icons.Filled.Delete, "إلغاء التسديد",
+                tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+        }
     }
 }

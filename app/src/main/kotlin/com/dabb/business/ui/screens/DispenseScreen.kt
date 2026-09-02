@@ -72,7 +72,9 @@ fun DispenseScreen() {
     val scope = rememberCoroutineScope()
     val available = viewModel.availableCount
     val effPrice = priceText ?: Money.format(viewModel.defaultPricePiasters)
-    val pricePiasters = Money.poundsToPiasters(effPrice)
+    // إصلاح خطأ إضافي اكتُشف أثناء المشكلة 14: السعر الافتراضي المنسّق يحتوي فواصل
+    // آلاف ("25,000") وtoDoubleOrNull لا يفهمها — فكان البيع يفشل دائماً دون لمس الحقل.
+    val pricePiasters = Money.poundsToPiasters(effPrice.replace(",", ""))
     val totalPiasters = units.toLong() * pricePiasters
     val stockShort = units > available
 
@@ -237,7 +239,12 @@ fun DispenseScreen() {
                     Spacer(Modifier.height(6.dp))
                     OutlinedTextField(
                         value = effPrice,
-                        onValueChange = { v -> priceText = v.filter { it.isDigit() || it == '.' } },
+                        onValueChange = { v ->
+                            // إصلاح المشكلة 14: أرقام فقط ونقطة عشرية واحدة كحد أقصى —
+                            // "25..5" لم تعد ممكنة (كانت تُفسَّر صفراً بلا تنبيه).
+                            val filtered = v.filter { it.isDigit() || it == '.' }
+                            if (filtered.count { it == '.' } <= 1) priceText = filtered
+                        },
                         singleLine = true, suffix = { Text("ريال", style = MaterialTheme.typography.labelMedium) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()

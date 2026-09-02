@@ -1,10 +1,21 @@
 package com.dabb.business.model
 
 import androidx.room.Entity
+import androidx.room.ForeignKey
 import androidx.room.PrimaryKey
 
-/** عملية بيع. كل المبالغ بالقروش. */
-@Entity(tableName = "sales")
+/** عملية بيع. كل المبالغ بالقروش.
+ *  إصلاح المشكلة 8: مفتاح أجنبي نحو customers يمنع مبيعات لزبائن غير موجودين،
+ *  وRESTRICT يمنع حذف زبون ما زالت له مبيعات. */
+@Entity(
+    tableName = "sales",
+    foreignKeys = [ForeignKey(
+        entity = CustomerEntity::class,
+        parentColumns = ["id"],
+        childColumns = ["customerId"],
+        onDelete = ForeignKey.RESTRICT
+    )]
+)
 data class SaleEntity(
     @PrimaryKey val id: String,
     val customerId: String = "",

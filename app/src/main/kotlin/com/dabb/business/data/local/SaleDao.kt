@@ -52,4 +52,11 @@ interface SaleDao {
 
     @Query("SELECT COALESCE(SUM(amountPaid),0) FROM sales WHERE customerId = :id")
     suspend fun getCustomerSalePaid(id: String): Long
+
+    // ===== ترقيم صفحات (إصلاح المشكلة 13 — منع تحميل الجدول كاملاً) =====
+    @Query("SELECT * FROM sales ORDER BY saleDate DESC LIMIT :limit OFFSET :offset")
+    suspend fun getPaged(limit: Int, offset: Int): List<SaleEntity>
+
+    @Query("SELECT COUNT(*) FROM sales")
+    suspend fun getCount(): Int
 }

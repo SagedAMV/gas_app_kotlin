@@ -5,6 +5,8 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.dabb.business.model.CylinderEntity
 import com.dabb.business.model.CustomerEntity
 import com.dabb.business.model.PaymentEntity
@@ -21,7 +23,7 @@ import com.dabb.business.model.StationPurchaseEntity
         StationPurchaseEntity::class,
         StationPaymentEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -38,6 +40,11 @@ abstract class AppDatabase : RoomDatabase() {
 
         const val DB_NAME = "gas_db.sqlite"
 
+        /**
+         * إصلاح المشكلة 5: أُزيل fallbackToDestructiveMigration() تماماً —
+         * أي تغيير مخطط مستقبلي بلا Migration صريحة سيفشل بصوت مرتفع
+         * بدل أن يمحو ديون الزبائن والمخزون بصمت.
+         */
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -45,12 +52,57 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     DB_NAME
                 )
-                    // قبل مرحلة البيانات الحقيقية — يُعاد بناء القاعدة عند تغيّر المخطط.
-                    // لاحقاً يُستبدل بترقية Migration صريحة مع وجود بيانات مستخدمين.
-                    .fallbackToDestructiveMigration()
+                    .addMigrations(MIGRATION_2_3)
                     .build()
                 INSTANCE = instance
                 instance
+            }
+        }
+
+        /**
+         * إغلاق القاعدة وتصفير الـ Singleton — يُستدعى قبل استبدال ملف القاعدة
+         * عند استيراد نسخة احتياطية (إصلاح المشكلة 4: الكتابة فوق قاعدة مفتوحة تفسدها).
+         */
+        fun shutdown() {
+            synchronized(this) {
+                INSTANCE?.close()
+                INSTANCE = null
+            }
+        }
+
+        /**
+         * ترقية 2 → 3 (إصلاح المشكلة 8): إعادة بناء جدول sales بمفتاح أجنبي
+         * نحو customers.id — حماية على مستوى القاعدة من مبيعات لزبائن وهمية.
+         * ملاحظة: مفاتيح SQLite الأجنبية لا تُضاف بـ ALTER، لذا يُعاد بناء الجدول
+         * (إنشاء جديد ← نسخ البيانات ← حذف القديم ← إعادة تسمية).
+         */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `sales_new` (" +
+                        "`id` TEXT NOT NULL, " +
+                        "`customerId` TEXT NOT NULL, " +
+                        "`customerName` TEXT NOT NULL, " +
+                        "`cylinderIdsJson` TEXT NOT NULL, " +
+                        "`unitsSold` INTEGER NOT NULL, " +
+                        "`pricePerUnit` INTEGER NOT NULL, " +
+                        "`totalAmount` INTEGER NOT NULL, " +
+                        "`amountPaid` INTEGER NOT NULL, " +
+                        "`status` TEXT NOT NULL, " +
+                        "`saleDate` INTEGER NOT NULL, " +
+                        "`notes` TEXT NOT NULL, " +
+                        "PRIMARY KEY(`id`), " +
+                        "FOREIGN KEY(`customerId`) REFERENCES `customers`(`id`) " +
+                        "ON UPDATE NO ACTION ON DELETE RESTRICT)"
+                )
+                db.execSQL(
+                    "INSERT INTO sales_new (id, customerId, customerName, cylinderIdsJson, " +
+                        "unitsSold, pricePerUnit, totalAmount, amountPaid, status, saleDate, notes) " +
+                        "SELECT id, customerId, customerName, cylinderIdsJson, " +
+                        "unitsSold, pricePerUnit, totalAmount, amountPaid, status, saleDate, notes FROM sales"
+                )
+                db.execSQL("DROP TABLE sales")
+                db.execSQL("ALTER TABLE sales_new RENAME TO sales")
             }
         }
     }

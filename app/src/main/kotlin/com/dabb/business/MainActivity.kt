@@ -1,6 +1,7 @@
 package com.dabb.business
 
 import android.os.Bundle
+import android.os.SystemClock
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -20,6 +21,8 @@ import androidx.compose.material3.Text
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,8 +30,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import kotlinx.coroutines.delay
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -49,15 +56,61 @@ import com.dabb.business.ui.screens.StationScreen
 import com.dabb.business.ui.theme.AppTheme
 
 class MainActivity : ComponentActivity() {
+
+    /** إصلاح المشكلة 16: كل تفاعل مع الشاشة يحدّث وقت آخر نشاط. */
+    override fun onUserInteraction() {
+        super.onUserInteraction()
+        lastInteractionAt = SystemClock.elapsedRealtime()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             AppTheme {
                 var unlocked by remember { mutableStateOf(false) }
-                if (unlocked) AppNavigation() else PinGate(onUnlocked = { unlocked = true })
+
+                if (unlocked) {
+                    // ① عند العودة من الخلفية: إن مضت فترة الخمول → إعادة القفل فوراً
+                    val lifecycleOwner = LocalLifecycleOwner.current
+                    DisposableEffect(lifecycleOwner) {
+                        val observer = LifecycleEventObserver { _, event ->
+                            if (event == Lifecycle.Event.ON_RESUME &&
+                                SystemClock.elapsedRealtime() - lastInteractionAt > AUTO_LOCK_MS
+                            ) {
+                                unlocked = false
+                            }
+                        }
+                        lifecycleOwner.lifecycle.addObserver(observer)
+                        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+                    }
+                    // ② والتطبيق مفتوح: فحص دوري كل 30 ثانية
+                    LaunchedEffect(Unit) {
+                        while (true) {
+                            delay(CHECK_INTERVAL_MS)
+                            if (SystemClock.elapsedRealtime() - lastInteractionAt > AUTO_LOCK_MS) {
+                                unlocked = false
+                                break
+                            }
+                        }
+                    }
+                }
+
+                if (unlocked) AppNavigation()
+                else PinGate(onUnlocked = {
+                    lastInteractionAt = SystemClock.elapsedRealtime()
+                    unlocked = true
+                })
             }
         }
+    }
+
+    companion object {
+        private const val AUTO_LOCK_MS = 5 * 60 * 1000L   // 5 دقائق خمول
+        private const val CHECK_INTERVAL_MS = 30 * 1000L   // فحص كل 30 ثانية
+
+        @Volatile
+        private var lastInteractionAt = SystemClock.elapsedRealtime()
     }
 }
 

@@ -7,6 +7,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ReceiptLong
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -21,29 +23,85 @@ import com.dabb.business.ui.components.AppHeader
 import com.dabb.business.ui.viewmodel.AppViewModel
 import com.dabb.business.util.Money
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
+/**
+ * سجل المبيعات الكامل.
+ * إصلاح المشكلة 12: بحث فوري بالاسم أو الملاحظات أو التاريخ.
+ * إصلاح المشكلة 13: تحميل على صفحات (100 سجل) بدل الجدول كاملاً — «تحميل المزيد» عند الحاجة.
+ */
 @Composable
 fun SalesHistoryScreen() {
     val viewModel: AppViewModel = viewModel()
     val scope = rememberCoroutineScope()
-    val sales = viewModel.allSales
+    val pageSize = 100
+
+    var sales by remember { mutableStateOf<List<SaleEntity>>(emptyList()) }
+    var totalCount by remember { mutableIntStateOf(0) }
+    var canLoadMore by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
+    var opError by remember { mutableStateOf<String?>(null) }
     var confirmCancel by remember { mutableStateOf<SaleEntity?>(null) }
     var refreshKey by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(refreshKey) { viewModel.refreshRecent() }
+    LaunchedEffect(refreshKey) {
+        totalCount = viewModel.getSalesCount()
+        val first = viewModel.getSalesPaged(pageSize, 0)
+        sales = first
+        canLoadMore = first.size == pageSize
+        if (refreshKey > 0) opError = null
+    }
+
+    // تصفية البحث — الاسم أو الملاحظات أو التاريخ المكتوب (yyyy/M/d)
+    val filtered = remember(sales, query) {
+        val q = query.trim()
+        if (q.isEmpty()) sales
+        else {
+            val fmt = SimpleDateFormat("yyyy/M/d", Locale.getDefault())
+            sales.filter {
+                it.customerName.contains(q, true) ||
+                    it.notes.contains(q, true) ||
+                    fmt.format(Date(it.saleDate)).contains(q, true)
+            }
+        }
+    }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        AppHeader(title = "سجل المبيعات", subtitle = "كل العمليات (${sales.size})",
+        AppHeader(title = "سجل المبيعات", subtitle = "كل العمليات ($totalCount)",
             icon = Icons.Filled.ReceiptLong)
 
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                label = { Text("بحث بالاسم أو التاريخ (مثل 2026/9/2)") },
+                leadingIcon = { Icon(Icons.Filled.Search, null, modifier = Modifier.size(18.dp)) },
+                singleLine = true, shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            opError?.let { msg ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.Warning, null, tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(msg, color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall)
+                }
+            }
+
             StaggeredReveal(0) {
                 Card(shape = RoundedCornerShape(18.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                    if (sales.isEmpty()) {
-                        EmptyHint("لا توجد مبيعات بعد — سجّل أول عملية من تبويب «الصرف»")
+                    if (filtered.isEmpty()) {
+                        EmptyHint(
+                            if (query.isBlank()) "لا توجد مبيعات بعد — سجّل أول عملية من تبويب «الصرف»"
+                            else "لا نتائج مطابقة لبحثك"
+                        )
                     } else {
-                        sales.forEachIndexed { i, sale ->
+                        filtered.forEachIndexed { i, sale ->
                             Row(
                                 Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically
@@ -64,10 +122,23 @@ fun SalesHistoryScreen() {
                                         tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
                                 }
                             }
-                            if (i < sales.lastIndex) DividerSoft()
+                            if (i < filtered.lastIndex) DividerSoft()
                         }
                     }
                 }
+            }
+
+            if (canLoadMore && query.isBlank()) {
+                OutlinedButton(
+                    onClick = {
+                        scope.launch {
+                            val more = viewModel.getSalesPaged(pageSize, sales.size)
+                            sales = sales + more
+                            canLoadMore = more.size == pageSize
+                        }
+                    },
+                    shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()
+                ) { Text("تحميل المزيد (${sales.size}/$totalCount)") }
             }
             Spacer(Modifier.height(6.dp))
         }
@@ -78,11 +149,18 @@ fun SalesHistoryScreen() {
             onDismissRequest = { confirmCancel = null },
             shape = RoundedCornerShape(20.dp),
             title = { Text("إلغاء هذا البيع؟") },
-            text = { Text("ستُرجَع ${sale.unitsSold} أسطوانة إلى المخزون وتُصحَّح مبالغ الزبون «${sale.customerName}» (${Money.format(sale.totalAmount)} ج).") },
+            text = { Text("ستُرجَع ${sale.unitsSold} أسطوانة إلى المخزون وتُصحَّح مبالغ الزبون «${sale.customerName}» (${Money.format(sale.totalAmount)} ريال).") },
             confirmButton = {
                 TextButton(onClick = {
                     scope.launch {
-                        viewModel.cancelSale(sale.id) { _ -> confirmCancel = null; refreshKey++ }
+                        viewModel.cancelSale(sale.id) { err ->
+                            confirmCancel = null
+                            if (err != null) {
+                                // رسالة الرفض (مثل: تحصيلات لاحقة) تظهر للمستخدم ولا تضيع
+                                opError = err
+                            }
+                            refreshKey++
+                        }
                     }
                 }) { Text("نعم، إلغاء", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold) }
             },
