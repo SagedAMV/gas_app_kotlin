@@ -23,7 +23,9 @@ interface CylinderDao {
     @Query("SELECT * FROM cylinders")
     suspend fun getAll(): List<CylinderEntity>
 
-    @Query("SELECT * FROM cylinders WHERE status = 'AVAILABLE' LIMIT :limit")
+    // إصلاح الخطأ 1: ‏ORDER BY مطابق لترتيب markSoldByQuantity — فلا تُسجَّل في
+    // cylinderIdsJson معرفات مختلفة عن الأسطوانات المُعلَّمة SOLD فعلياً.
+    @Query("SELECT * FROM cylinders WHERE status = 'AVAILABLE' ORDER BY acquiredDate ASC, id ASC LIMIT :limit")
     suspend fun getAvailable(limit: Int): List<CylinderEntity>
 
     @Query("SELECT COALESCE(SUM(acquisitionCost),0) FROM cylinders WHERE status = 'SOLD'")
@@ -44,9 +46,10 @@ interface CylinderDao {
     @Query("UPDATE cylinders SET status = 'AVAILABLE', soldDate = 0 WHERE id IN (:ids) AND status = 'SOLD' AND soldDate = :soldDate")
     suspend fun markAvailable(ids: List<String>, soldDate: Long): Int
 
-    /** أسطوانات ما زالت متوفرة واكتُسبت في لحظة محددة — لإلغاء سحب محطة بأمان (المشكلة 11). */
-    @Query("SELECT id FROM cylinders WHERE status = 'AVAILABLE' AND acquiredDate = :acquiredDate LIMIT :limit")
-    suspend fun getAvailableIdsByAcquiredDate(acquiredDate: Long, limit: Int): List<String>
+    /** إصلاح الخطأ 3: الربط بـ purchaseId بدل acquiredDate — سحبتان في
+     *  اللحظة نفسها لم تعودا تختلطان عند الإلغاء. */
+    @Query("SELECT id FROM cylinders WHERE status = 'AVAILABLE' AND purchaseId = :purchaseId LIMIT :limit")
+    suspend fun getAvailableIdsByPurchase(purchaseId: String, limit: Int): List<String>
 
     /** حذف أسطوانات محددة — يُستخدم مع إلغاء سحب المحطة (المشكلة 11). */
     @Query("DELETE FROM cylinders WHERE id IN (:ids)")

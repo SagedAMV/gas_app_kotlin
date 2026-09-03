@@ -10,7 +10,8 @@ interface PaymentDao {
     @Insert
     suspend fun insert(p: PaymentEntity)
 
-    @Query("SELECT * FROM payments WHERE customerId = :id ORDER BY paymentDate DESC")
+    // إصلاح الخطأ 10: ‏LIMIT 200 (الأحدث أولاً — فحص «التحصيلات اللاحقة» يبقى صحيحاً)
+    @Query("SELECT * FROM payments WHERE customerId = :id ORDER BY paymentDate DESC LIMIT 200")
     suspend fun getByCustomer(id: String): List<PaymentEntity>
 
     @Query("SELECT * FROM payments ORDER BY paymentDate DESC")
@@ -30,4 +31,8 @@ interface PaymentDao {
 
     @Query("DELETE FROM payments WHERE id = :id")
     suspend fun deleteById(id: String): Int
+
+    /** إصلاح الخطأ 9: تحديث الاسم المكرر عند تعديل اسم الزبون. */
+    @Query("UPDATE payments SET customerName = :name WHERE customerId = :id")
+    suspend fun updateCustomerName(id: String, name: String): Int
 }

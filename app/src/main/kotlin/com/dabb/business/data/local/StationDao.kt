@@ -11,7 +11,8 @@ interface StationDao {
     @Insert
     suspend fun insertPurchase(p: StationPurchaseEntity)
 
-    @Query("SELECT * FROM station_purchases ORDER BY purchaseDate DESC")
+    // إصلاح الخطأ 10: ‏LIMIT 200 (الواجهة تعرض أحدث 30 أصلاً)
+    @Query("SELECT * FROM station_purchases ORDER BY purchaseDate DESC LIMIT 200")
     suspend fun getPurchases(): List<StationPurchaseEntity>
 
     @Query("SELECT COALESCE(SUM(totalAmount),0) FROM station_purchases")
@@ -26,7 +27,8 @@ interface StationDao {
     @Insert
     suspend fun insertPayment(p: StationPaymentEntity)
 
-    @Query("SELECT * FROM station_payments ORDER BY paymentDate DESC")
+    // إصلاح الخطأ 10: ‏LIMIT 200
+    @Query("SELECT * FROM station_payments ORDER BY paymentDate DESC LIMIT 200")
     suspend fun getPayments(): List<StationPaymentEntity>
 
     @Query("SELECT COALESCE(SUM(amount),0) FROM station_payments")

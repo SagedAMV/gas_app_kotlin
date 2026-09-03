@@ -55,7 +55,8 @@ fun PaymentDialog(
                 val amount = Money.poundsToPiasters(amountText)
                 when {
                     amount <= 0L -> err = "أدخل مبلغاً أكبر من صفر"
-                    amount > maxPiasters + 1L -> err = "المبلغ أكبر من المتاح (${Money.format(maxPiasters)} ج)"
+                    // إصلاح الخطأ 6: الحد دقيق — لا يُسمح بأي مبلغ يتجاوز المتاح
+                    amount > maxPiasters -> err = "المبلغ أكبر من المتاح (${Money.format(maxPiasters)} ريال)"
                     else -> onConfirm(amount, note)
                 }
             }) { Text("تأكيد", fontWeight = FontWeight.Bold) }

@@ -10,13 +10,15 @@ interface SaleDao {
     @Insert
     suspend fun insert(s: SaleEntity)
 
-    @Query("SELECT * FROM sales WHERE customerId = :id ORDER BY saleDate DESC")
+    // إصلاح الخطأ 10: ‏LIMIT 200 — أحدث 200 عملية تكفي العرض والفحوص
+    @Query("SELECT * FROM sales WHERE customerId = :id ORDER BY saleDate DESC LIMIT 200")
     suspend fun getByCustomer(id: String): List<SaleEntity>
 
     @Query("SELECT * FROM sales ORDER BY saleDate DESC")
     suspend fun getAll(): List<SaleEntity>
 
-    @Query("SELECT * FROM sales WHERE saleDate >= :from ORDER BY saleDate DESC")
+    // إصلاح الخطأ 7: ‏LIMIT 100 — فترة «الشهر» بألف بيع لم تعد تُحمَّل كاملة
+    @Query("SELECT * FROM sales WHERE saleDate >= :from ORDER BY saleDate DESC LIMIT 100")
     suspend fun getSince(from: Long): List<SaleEntity>
 
     @Query("SELECT * FROM sales WHERE id = :id")
@@ -59,4 +61,8 @@ interface SaleDao {
 
     @Query("SELECT COUNT(*) FROM sales")
     suspend fun getCount(): Int
+
+    /** إصلاح الخطأ 9: تحديث الاسم المكرر عند تعديل اسم الزبون. */
+    @Query("UPDATE sales SET customerName = :name WHERE customerId = :id")
+    suspend fun updateCustomerName(id: String, name: String): Int
 }

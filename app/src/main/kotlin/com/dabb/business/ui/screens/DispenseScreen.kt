@@ -225,7 +225,7 @@ fun DispenseScreen() {
                         Text("$units", style = MaterialTheme.typography.titleLarge,
                             color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold,
                             modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                        IconButton(onClick = { units++ }) {
+                        IconButton(onClick = { if (units < available) units++ }) {
                             Icon(Icons.Filled.Add, "زيادة", tint = MaterialTheme.colorScheme.primary)
                         }
                     }

@@ -16,5 +16,7 @@ data class CylinderEntity(
     val acquiredFromStation: String = "",
     val acquisitionCost: Long = 0L,
     val acquiredDate: Long = 0L,
-    val soldDate: Long = 0L
+    val soldDate: Long = 0L,
+    /** إصلاح الخطأ 3: ربط صريح بسجل station_purchases — أساس إلغاء السحب بأمان. */
+    val purchaseId: String = ""
 )

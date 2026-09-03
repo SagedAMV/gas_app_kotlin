@@ -79,7 +79,8 @@ fun CustomerDetailScreen(customerId: String, onBack: () -> Unit) {
                 Card(
                     shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = if (d.balance > 1L) MaterialTheme.colorScheme.errorContainer
+                        // إصلاح الخطأ 5: ‏> 0L — الدين = 1 ريال دينٌ فعلاً
+                        containerColor = if (d.balance > 0L) MaterialTheme.colorScheme.errorContainer
                         else MaterialTheme.colorScheme.primaryContainer)
                 ) {
                     Column(Modifier.padding(18.dp)) {
@@ -89,7 +90,7 @@ fun CustomerDetailScreen(customerId: String, onBack: () -> Unit) {
                         Row(verticalAlignment = Alignment.Bottom) {
                             AnimatedMoney(Money.piastersToPounds(d.balance),
                                 style = MaterialTheme.typography.displaySmall,
-                                color = if (d.balance > 1L) MaterialTheme.colorScheme.error
+                                color = if (d.balance > 0L) MaterialTheme.colorScheme.error
                                 else MaterialTheme.colorScheme.primary)
                             Text(" ريال", style = MaterialTheme.typography.bodyMedium,
                                 modifier = Modifier.padding(bottom = 8.dp))
@@ -105,7 +106,7 @@ fun CustomerDetailScreen(customerId: String, onBack: () -> Unit) {
 
             StaggeredReveal(1) {
                 Button(
-                    onClick = { showPay = true }, enabled = d.balance > 1L,
+                    onClick = { showPay = true }, enabled = d.balance > 0L,
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier.fillMaxWidth().height(50.dp)
                 ) {

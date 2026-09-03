@@ -3,6 +3,8 @@ package com.dabb.business.ui.viewmodel
 import android.app.Application
 import android.content.Intent
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -20,6 +22,7 @@ import com.dabb.business.model.SaleStatus
 import com.dabb.business.model.StationPaymentEntity
 import com.dabb.business.model.StationPurchaseEntity
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -165,7 +168,12 @@ class AppViewModel internal constructor(
             if (dup != null && dup.id != id) error("يوجد زبون مسجّل بنفس الاسم «${name.trim()}»")
             db.withTransaction {
                 val c = custDao.getById(id) ?: error("الزبون غير موجود")
-                custDao.insertOrUpdate(c.copy(name = name.trim(), phone = phone.trim()))
+                val newName = name.trim()
+                custDao.insertOrUpdate(c.copy(name = newName, phone = phone.trim()))
+                // إصلاح الخطأ 9: الاسم مكرر في sales وpayments — يُحدَّث فيهما
+                // أيضاً حتى لا تظهر التقارير والسجلات أسماء قديمة.
+                saleDao.updateCustomerName(id, newName)
+                payDao.updateCustomerName(id, newName)
             }
             refreshCustomers(); refreshDebtors()
         }
@@ -305,7 +313,14 @@ class AppViewModel internal constructor(
                 val ids = sale.cylinderIdsJson.split(",").filter { it.isNotBlank() }
                 // إصلاح المشكلة 2: تُعاد فقط الأسطوانات ما زالت معلّمة بهذا البيع
                 // (مطابقة soldDate) — أسطوانة أُعيد بيعها لاحقاً لا تُمس.
-                if (ids.isNotEmpty()) cylDao.markAvailable(ids, sale.saleDate)
+                // إصلاح الخطأ 2 (الجديد): التحقق من العدد المُعاد — إن نقص، تُلغى
+                // المعاملة كاملة بدل حذف البيع وترك أسطوانات مفقودة للأبد.
+                if (ids.isNotEmpty()) {
+                    val restored = cylDao.markAvailable(ids, sale.saleDate)
+                    check(restored == ids.size) {
+                        "تعذّر إرجاع ${ids.size - restored} أسطوانة من هذا البيع — أُلغي الإلغاء"
+                    }
+                }
                 saleDao.deleteById(saleId)
                 recomputeCustomer(sale.customerId)
             }
@@ -321,6 +336,9 @@ class AppViewModel internal constructor(
             val total = units.toLong() * costPiasters
             require(paidNowPiasters <= total) { "المدفوع أكبر من الإجمالي" }
             val now = System.currentTimeMillis()
+            // إصلاح الخطأ 3: معرّف السحب يُولَّد أولاً ويُختم على كل أسطوانة —
+            // الرابط الصريح يلغي التباس acquiredDate المتطابق بين سحبتين.
+            val purchaseId = UUID.randomUUID().toString()
             db.withTransaction {
                 val cylinders = List(units) {
                     CylinderEntity(
@@ -329,13 +347,14 @@ class AppViewModel internal constructor(
                         status = CylinderStatus.AVAILABLE,
                         acquiredFromStation = "محطة المورد",
                         acquisitionCost = costPiasters,
-                        acquiredDate = now
+                        acquiredDate = now,
+                        purchaseId = purchaseId
                     )
                 }
                 cylDao.insertAll(cylinders)
                 stationDao.insertPurchase(
                     StationPurchaseEntity(
-                        id = UUID.randomUUID().toString(),
+                        id = purchaseId,
                         units = units,
                         costPerUnit = costPiasters,
                         totalAmount = total,
@@ -378,7 +397,8 @@ class AppViewModel internal constructor(
         runOp(onResult) {
             val p = stationDao.getPurchaseById(purchaseId) ?: error("السحب غير موجود")
             db.withTransaction {
-                val ids = cylDao.getAvailableIdsByAcquiredDate(p.purchaseDate, p.units)
+                // إصلاح الخطأ 3: البحث بـ purchaseId الصريح بدل acquiredDate الغامض
+                val ids = cylDao.getAvailableIdsByPurchase(purchaseId, p.units)
                 if (ids.size < p.units)
                     error("لا يمكن الإلغاء — بعض أسطوانات هذا السحب بِيعت بالفعل. ألغِ تلك المبيعات أولاً.")
                 cylDao.deleteByIds(ids)
@@ -411,7 +431,14 @@ class AppViewModel internal constructor(
     suspend fun exportDatabase(uri: Uri): String? = withContext(Dispatchers.IO) {
         runCatching {
             val ctx = getApplication<Application>()
-            db.openHelper.writableDatabase.query("PRAGMA wal_checkpoint(FULL)").use { }
+            // إصلاح الخطأ 11: التحقق من نجاح الـ checkpoint — تصدير بلا دمج WAL
+            // قد يُنتج نسخة احتياطية ناقصة البيانات.
+            db.openHelper.writableDatabase.query("PRAGMA wal_checkpoint(FULL)").use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val busy = cursor.getInt(0) // 0 = اكتمل، غير ذلك = مشغول/خطأ
+                    if (busy != 0) error("تعذّر تجهيز القاعدة للتصدير (checkpoint مشغول) — أعد المحاولة")
+                }
+            }
             val src = ctx.getDatabasePath(AppDatabase.DB_NAME)
             ctx.contentResolver.openOutputStream(uri)?.use { out ->
                 src.inputStream().use { it.copyTo(out) }
@@ -422,8 +449,8 @@ class AppViewModel internal constructor(
     suspend fun importDatabase(uri: Uri): String? = withContext(Dispatchers.IO) {
         runCatching {
             val ctx = getApplication<Application>()
-            // إصلاح المشكلة 4: إغلاق القاعدة وتصفير الـ Singleton قبل أي كتابة —
-            // النسخ فوق قاعدة مفتوحة يفسد الملف.
+            // إصلاح المشكلة 4 (السابقة): إغلاق القاعدة وتصفير الـ Singleton قبل
+            // أي كتابة — النسخ فوق قاعدة مفتوحة يفسد الملف.
             AppDatabase.shutdown()
             val dst = ctx.getDatabasePath(AppDatabase.DB_NAME)
             // القاعدة تعمل بوضع WAL — حذف الملفين المساعدين وإلا أُفسدت النسخة الجديدة.
@@ -437,7 +464,11 @@ class AppViewModel internal constructor(
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
             } ?: error("تعذّر تحضير إعادة التشغيل")
             ctx.startActivity(intent)
-            Runtime.getRuntime().exit(0)
+            // إصلاح الخطأ 4: ‏startActivity غير متزامن — الخروج الفوري قد يقتل
+            // العملية قبل انطلاق النشاط الجديد. مهلة 500ms تكفي لتسليم القصد للنظام.
+            Handler(Looper.getMainLooper()).postDelayed({
+                Runtime.getRuntime().exit(0)
+            }, 500)
         }.exceptionOrNull()?.message
     }
 
@@ -449,7 +480,8 @@ class AppViewModel internal constructor(
         custDao.insertOrUpdate(c.copy(totalDebt = debt, totalPaid = paid))
     }
 
-    private fun launch(block: suspend () -> Unit) {
+    /** إصلاح الخطأ 8: تُعيد Job — فيمكن للانتظار (join) في الاختبارات أن يترجم. */
+    private fun launch(block: suspend () -> Unit): Job =
         viewModelScope.launch {
             try {
                 busy = true
@@ -461,7 +493,6 @@ class AppViewModel internal constructor(
                 busy = false
             }
         }
-    }
 
     /** حاجز تزامن ذرّي: يمنع تشغيل عمليتين معدِّلتين معاً (إصلاح المشكلة 15).
      *  mutableStateOf وحده لا يكفي — الضغطتان السريعان كانتا تتجاوزانه. */

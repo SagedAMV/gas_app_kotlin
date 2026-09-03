@@ -23,7 +23,7 @@ import com.dabb.business.model.StationPurchaseEntity
         StationPurchaseEntity::class,
         StationPaymentEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -52,7 +52,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     DB_NAME
                 )
-                    .addMigrations(MIGRATION_2_3)
+                    .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
                     .build()
                 INSTANCE = instance
                 instance
@@ -105,6 +105,18 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE sales_new RENAME TO sales")
                 // فهرس المفتاح الأجنبي — يمنع فحص الجدول كاملاً (تحذير Room)
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_sales_customerId` ON `sales` (`customerId`)")
+            }
+        }
+
+        /**
+         * ترقية 3 → 4 (إصلاح الخطأ 3): عمود purchaseId في cylinders يربط كل
+         * أسطوانة بسجل السحب من المحطة — إلغاء سحب لم يعد يعتمد على acquiredDate
+         * الذي قد يتطابق بين سحبتين. ملاحظة صدق: إضافة حقل لكيان Room تغيّر
+         * المخطط حكماً، لذا هذه الهجرة ضرورية رغم أن القيمة الافتراضية في Kotlin.
+         */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE cylinders ADD COLUMN purchaseId TEXT NOT NULL DEFAULT ''")
             }
         }
     }

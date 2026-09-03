@@ -23,10 +23,14 @@ class SettingsStore(context: Context) {
 
     fun setPin(pin: String) {
         val salt = randomSalt()
-        prefs.edit().putString(KEY_PIN_HASH, salt + ":" + sha256(pin + salt)).apply()
+        // إصلاح الخطأ 13: ‏commit() كتابة متزامنة — الـ PIN لا يُفقد عند انقطاع
+        // التيار فور الضغط (apply غير متزامن). الكتابة صغيرة فالأثر على الأداء مهمل.
+        prefs.edit().putString(KEY_PIN_HASH, salt + ":" + sha256(pin + salt)).commit()
     }
 
-    fun clearPin() = prefs.edit().remove(KEY_PIN_HASH).apply()
+    fun clearPin() {
+        prefs.edit().remove(KEY_PIN_HASH).commit()
+    }
 
     fun checkPin(pin: String): Boolean {
         val stored = prefs.getString(KEY_PIN_HASH, null) ?: return false

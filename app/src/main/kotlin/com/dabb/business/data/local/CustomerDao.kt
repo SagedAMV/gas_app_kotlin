@@ -23,8 +23,9 @@ interface CustomerDao {
     @Query("SELECT * FROM customers WHERE name LIKE '%' || :q || '%' OR phone LIKE '%' || :q || '%' ORDER BY name COLLATE NOCASE ASC")
     suspend fun search(q: String): List<CustomerEntity>
 
-    /** المدينون: كاش الحقول يطابق الرصيد المشتق (يُعاد حسابه في المعاملات). */
-    @Query("SELECT * FROM customers WHERE totalDebt > totalPaid ORDER BY (totalDebt - totalPaid) DESC")
+    /** المدينون: كاش الحقول يطابق الرصيد المشتق (يُعاد حسابه في المعاملات).
+     *  إصلاح الخطأ 10: ‏LIMIT 200 — الأعلى ديناً أولاً. */
+    @Query("SELECT * FROM customers WHERE totalDebt > totalPaid ORDER BY (totalDebt - totalPaid) DESC LIMIT 200")
     suspend fun getCustomersWithDebt(): List<CustomerEntity>
 
     @Query("DELETE FROM customers WHERE id = :id")
