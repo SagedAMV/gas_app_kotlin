@@ -40,6 +40,7 @@ fun StationScreen() {
     var confirmCancelPurchase by remember { mutableStateOf<StationPurchaseEntity?>(null) }
     var confirmCancelPayment by remember { mutableStateOf<StationPaymentEntity?>(null) }
     var opError by remember { mutableStateOf<String?>(null) }
+    var intakeError by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(refreshKey) { data = viewModel.getStationData() }
     val d = data
@@ -54,7 +55,8 @@ fun StationScreen() {
                 Card(
                     shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = if (balance > 1L) MaterialTheme.colorScheme.errorContainer
+                        // إصلاح الفحص M6: > 0L — دَين = 1 ريال دَينٌ حقيقي
+                        containerColor = if (balance > 0L) MaterialTheme.colorScheme.errorContainer
                         else MaterialTheme.colorScheme.primaryContainer)
                 ) {
                     Column(Modifier.padding(18.dp)) {
@@ -64,7 +66,7 @@ fun StationScreen() {
                         Row {
                             AnimatedMoney(Money.piastersToPounds(balance),
                                 style = MaterialTheme.typography.displaySmall,
-                                color = if (balance > 1L) MaterialTheme.colorScheme.error
+                                color = if (balance > 0L) MaterialTheme.colorScheme.error
                                 else MaterialTheme.colorScheme.primary)
                             Text(" ريال", style = MaterialTheme.typography.bodyMedium,
                                 modifier = Modifier.padding(bottom = 8.dp))
@@ -79,12 +81,13 @@ fun StationScreen() {
 
             StaggeredReveal(1) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Button(onClick = { showIntake = true }, shape = RoundedCornerShape(14.dp),
+                    Button(onClick = { intakeError = null; showIntake = true }, shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.weight(1f).height(48.dp)) {
                         Icon(Icons.Filled.LocalShipping, null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp)); Text("سحب جديد", style = MaterialTheme.typography.labelMedium)
                     }
-                    OutlinedButton(onClick = { showPay = true }, enabled = balance > 1L,
+                    // إصلاح الفحص M6: كان معطلاً عند دَين = 1 ريال (المتبقي بعد التقريب)
+                    OutlinedButton(onClick = { showPay = true }, enabled = balance > 0L,
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.weight(1f).height(48.dp)) {
                         Icon(Icons.Filled.Payments, null, modifier = Modifier.size(18.dp))
@@ -123,12 +126,15 @@ fun StationScreen() {
     }
 
     if (showIntake) {
+        // إصلاح الفحص M1: فشل السحب (مثل: تجاوز الحد/المدفوع أكبر) لم يعد صامتاً
         StationIntakeDialog(
+            error = intakeError,
             onDismiss = { showIntake = false },
             onConfirm = { units, cost, paidNow ->
                 scope.launch {
                     viewModel.purchaseFromStation(units, cost, paidNow, "") { e ->
                         if (e == null) { showIntake = false; refreshKey++ }
+                        else intakeError = e
                     }
                 }
             }

@@ -29,7 +29,33 @@ class SettingsStore(context: Context) {
     }
 
     fun clearPin() {
-        prefs.edit().remove(KEY_PIN_HASH).commit()
+        prefs.edit().remove(KEY_PIN_HASH).remove(KEY_PIN_FAILS).remove(KEY_PIN_LAST_FAIL).commit()
+    }
+
+    /**
+     * إصلاح الفحص M8: قفل تدرجي ضد التخمين على جهاز مفقود —
+     * 4 أرقام = 10,000 احتمال، وبلا حد للمحاولات يصبح التخمين ممكناً.
+     * بعد MAX_ATTEMPTS محاولة خاطئة متتالية: قفل LOCK_MS.
+     */
+    fun pinLockRemainingMs(now: Long = System.currentTimeMillis()): Long {
+        val fails = prefs.getInt(KEY_PIN_FAILS, 0)
+        if (fails < MAX_ATTEMPTS) return 0L
+        val elapsed = now - prefs.getLong(KEY_PIN_LAST_FAIL, 0L)
+        return if (elapsed < LOCK_MS) LOCK_MS - elapsed else 0L
+    }
+
+    /** يسجّل محاولة فاشلة ويُرجع المدة المتبقية للقفل إن تراكمت المحاولات. */
+    fun registerPinFailure(now: Long = System.currentTimeMillis()): Long {
+        val fails = prefs.getInt(KEY_PIN_FAILS, 0) + 1
+        prefs.edit()
+            .putInt(KEY_PIN_FAILS, fails)
+            .putLong(KEY_PIN_LAST_FAIL, now)
+            .commit()
+        return pinLockRemainingMs(now)
+    }
+
+    fun resetPinFailures() {
+        prefs.edit().remove(KEY_PIN_FAILS).remove(KEY_PIN_LAST_FAIL).commit()
     }
 
     fun checkPin(pin: String): Boolean {
@@ -59,5 +85,9 @@ class SettingsStore(context: Context) {
     companion object {
         private const val KEY_PRICE = "default_price_piasters"
         private const val KEY_PIN_HASH = "pin_hash"
+        private const val KEY_PIN_FAILS = "pin_fails"
+        private const val KEY_PIN_LAST_FAIL = "pin_last_fail"
+        private const val MAX_ATTEMPTS = 5
+        private const val LOCK_MS = 60_000L
     }
 }

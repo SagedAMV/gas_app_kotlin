@@ -5,6 +5,13 @@ import android.os.SystemClock
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Inventory2
@@ -18,7 +25,11 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -27,7 +38,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -35,6 +48,13 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.dabb.business.ui.screens.PinGate
+import com.dabb.business.ui.screens.ReportsScreen
+import com.dabb.business.ui.screens.SalesHistoryScreen
+import com.dabb.business.ui.screens.SettingsScreen
+import com.dabb.business.ui.screens.StationScreen
+import com.dabb.business.ui.viewmodel.AppViewModel
 import kotlinx.coroutines.delay
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
@@ -48,11 +68,6 @@ import com.dabb.business.ui.screens.CustomerDetailScreen
 import com.dabb.business.ui.screens.CustomersScreen
 import com.dabb.business.ui.screens.DispenseScreen
 import com.dabb.business.ui.screens.InventoryScreen
-import com.dabb.business.ui.screens.PinGate
-import com.dabb.business.ui.screens.ReportsScreen
-import com.dabb.business.ui.screens.SalesHistoryScreen
-import com.dabb.business.ui.screens.SettingsScreen
-import com.dabb.business.ui.screens.StationScreen
 import com.dabb.business.ui.theme.AppTheme
 
 class MainActivity : ComponentActivity() {
@@ -168,11 +183,15 @@ fun AppNavigation() {
                 }
             }
         ) { padding ->
-            NavHost(
-                navController = navController,
-                startDestination = "inventory",
-                modifier = Modifier.padding(padding)
-            ) {
+            // إصلاح الفحص M1: قناة أخطاء الخلفية (errorMessage) كانت ميتة —
+            // أي فشل غير متوقع (تحديث/خلفية) يظهر هنا ويُغلق تلقائياً بعد 5 ثوانٍ.
+            val errorViewModel: AppViewModel = viewModel()
+            Box {
+                NavHost(
+                    navController = navController,
+                    startDestination = "inventory",
+                    modifier = Modifier.padding(padding)
+                ) {
                 animatedComposable("inventory") {
                     InventoryScreen(
                         onNavigateToDispense = { navController.navigate("dispense") },
@@ -201,6 +220,43 @@ fun AppNavigation() {
                     val id = entry.arguments?.getString("customerId").orEmpty()
                     CustomerDetailScreen(customerId = id, onBack = { navController.popBackStack() })
                 }
+                }
+                GlobalErrorBanner(
+                    error = errorViewModel.errorMessage,
+                    onDismiss = { errorViewModel.clearError() }
+                )
+            }
+        }
+    }
+}
+
+/** شريط خطأ عام للأخطاء غير المباشرة — يظهر أعلى الشاشة ويختفي بعد 5 ثوانٍ. */
+@Composable
+private fun GlobalErrorBanner(error: String?, onDismiss: () -> Unit) {
+    LaunchedEffect(error) {
+        if (error != null) {
+            delay(5000)
+            onDismiss()
+        }
+    }
+    AnimatedVisibility(
+        visible = error != null,
+        enter = fadeIn() + slideInVertically { it / 3 },
+        exit = fadeOut()
+    ) {
+        error?.let { msg ->
+            Row(
+                Modifier
+                    .statusBarsPadding()
+                    .fillMaxWidth()
+                    .padding(12.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.errorContainer),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(msg, color = MaterialTheme.colorScheme.onErrorContainer,
+                    style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                TextButton(onClick = onDismiss) { Text("إغلاق") }
             }
         }
     }

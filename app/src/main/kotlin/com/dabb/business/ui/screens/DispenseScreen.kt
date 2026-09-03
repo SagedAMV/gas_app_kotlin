@@ -242,7 +242,8 @@ fun DispenseScreen() {
                         onValueChange = { v ->
                             // إصلاح المشكلة 14: أرقام فقط ونقطة عشرية واحدة كحد أقصى —
                             // "25..5" لم تعد ممكنة (كانت تُفسَّر صفراً بلا تنبيه).
-                            val filtered = v.filter { it.isDigit() || it == '.' }
+                            // إصلاح الفحص H3: حد 11 خانة — بلا حد كان يُدخل Long.MAX وفساد مالي.
+                            val filtered = v.filter { it.isDigit() || it == '.' }.take(11)
                             if (filtered.count { it == '.' } <= 1) priceText = filtered
                         },
                         singleLine = true, suffix = { Text("ريال", style = MaterialTheme.typography.labelMedium) },

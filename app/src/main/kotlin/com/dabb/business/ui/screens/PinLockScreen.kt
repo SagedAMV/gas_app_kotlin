@@ -36,14 +36,28 @@ fun PinGate(onUnlocked: () -> Unit) {
     var pin by remember { mutableStateOf("") }
     var error by remember { mutableStateOf(false) }
     var shakeKey by remember { mutableIntStateOf(0) }
+    // إصلاح الفحص M8: قفل تدرجي — 5 محاولات خاطئة ← 60 ثانية بلا إدخال
+    var lockRemainingMs by remember { mutableLongStateOf(0L) }
+
+    LaunchedEffect(lockRemainingMs) {
+        while (lockRemainingMs > 0L) {
+            kotlinx.coroutines.delay(500)
+            lockRemainingMs = store.pinLockRemainingMs()
+        }
+    }
 
     fun press(d: String) {
-        if (pin.length >= 4) return
+        if (pin.length >= 4 || lockRemainingMs > 0L) return
         pin += d
         error = false
         if (pin.length == 4) {
-            if (store.checkPin(pin)) { needsPin = false; onUnlocked() }
-            else { error = true; shakeKey++; pin = "" }
+            if (store.checkPin(pin)) {
+                store.resetPinFailures()
+                needsPin = false; onUnlocked()
+            } else {
+                error = true; shakeKey++; pin = ""
+                lockRemainingMs = store.registerPinFailure()
+            }
         }
     }
 
@@ -63,9 +77,15 @@ fun PinGate(onUnlocked: () -> Unit) {
             }
             Spacer(Modifier.height(16.dp))
             Text("دبب البترول", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
-            Text(if (error) "الكود غير صحيح" else "أدخل رمز الدخول",
-                color = if (error) Color(0xFFFFD2CF) else Color.White.copy(alpha = 0.8f),
-                fontSize = 13.sp)
+            Text(
+                when {
+                    lockRemainingMs > 0L -> "محاولات خاطئة متكررة — أعد المحاولة بعد ${(lockRemainingMs / 1000 + 1).toInt()} ثوانٍ"
+                    error -> "الكود غير صحيح"
+                    else -> "أدخل رمز الدخول"
+                },
+                color = if (error || lockRemainingMs > 0L) Color(0xFFFFD2CF) else Color.White.copy(alpha = 0.8f),
+                fontSize = 13.sp
+            )
             Spacer(Modifier.height(28.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                 repeat(4) { i ->

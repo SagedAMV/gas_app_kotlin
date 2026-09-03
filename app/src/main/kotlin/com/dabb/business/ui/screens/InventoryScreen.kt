@@ -64,14 +64,18 @@ fun InventoryScreen(
 
     var showAdded by remember { mutableStateOf(false) }
     var showIntake by remember { mutableStateOf(false) }
+    var intakeError by remember { mutableStateOf<String?>(null) }
 
     if (showIntake) {
         StationIntakeDialog(
+            error = intakeError,
             onDismiss = { showIntake = false },
             onConfirm = { units, cost, paidNow ->
                 scope.launch {
                     var ok = true
-                    viewModel.purchaseFromStation(units, cost, paidNow, "") { err -> if (err != null) ok = false }
+                    viewModel.purchaseFromStation(units, cost, paidNow, "") { err ->
+                        if (err != null) { ok = false; intakeError = err }
+                    }
                     if (ok) {
                         showIntake = false; showAdded = true
                         kotlinx.coroutines.delay(2200); showAdded = false
@@ -158,7 +162,7 @@ fun InventoryScreen(
 
             StaggeredReveal(2) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedButton(onClick = { showIntake = true },
+                    OutlinedButton(onClick = { intakeError = null; showIntake = true },
                         modifier = Modifier.weight(1f), shape = RoundedCornerShape(14.dp)) {
                         Icon(Icons.Filled.LocalShipping, null, modifier = Modifier.size(17.dp))
                         Spacer(Modifier.width(6.dp))
@@ -254,6 +258,8 @@ internal fun timeAgo(millis: Long): String {
  */
 @Composable
 fun StationIntakeDialog(
+    // إصلاح الفحص M1: خطأ العملية من ViewModel (كان يُبلع صامتاً في كلا الموضعين)
+    error: String? = null,
     onDismiss: () -> Unit,
     onConfirm: (units: Int, costPiasters: Long, paidNowPiasters: Long) -> Unit
 ) {
@@ -266,6 +272,7 @@ fun StationIntakeDialog(
     val cost = Money.poundsToPiasters(costText)
     val paidNow = Money.poundsToPiasters(paidText)
     val total = units.toLong() * cost
+    val shownError = err ?: error
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -275,22 +282,23 @@ fun StationIntakeDialog(
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("تُضاف الأسطوانات للمخزون، والباقي عن المدفوع يُسجَّل ديناً للمحطة.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                OutlinedTextField(unitsText, { unitsText = it.filter { ch -> ch.isDigit() } },
+                OutlinedTextField(unitsText, { unitsText = it.filter { ch -> ch.isDigit() }.take(5) },
                     label = { Text("عدد الأسطوانات") }, singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(costText, { costText = it.filter { ch -> ch.isDigit() || ch == '.' } },
+                // إصلاح الفحص H3: حد 10 أرقام — بلا حد كان يُدخل Long.MAX وفساد مالي
+                OutlinedTextField(costText, { costText = it.filter { ch -> ch.isDigit() || ch == '.' }.take(11) },
                     label = { Text("تكلفة الوحدة (ريال)") }, singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(paidText, { paidText = it.filter { ch -> ch.isDigit() || ch == '.' } },
+                OutlinedTextField(paidText, { paidText = it.filter { ch -> ch.isDigit() || ch == '.' }.take(11) },
                     label = { Text("المدفوع الآن (0 = آجل)") }, singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth())
                 Text("الإجمالي: ${Money.format(total)} ريال · دَين المحطة: ${Money.format((total - paidNow).coerceAtLeast(0L))} ريال",
                     style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.SemiBold)
-                if (err != null) Text(err!!, style = MaterialTheme.typography.bodySmall,
+                if (shownError != null) Text(shownError!!, style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error)
             }
         },
@@ -298,6 +306,7 @@ fun StationIntakeDialog(
             TextButton(onClick = {
                 when {
                     units <= 0 || cost <= 0 -> err = "أدخل عدداً وتكلفة صحيحين"
+                    units > Money.MAX_UNITS -> err = "العدد يتجاوز الحد المسموح (${Money.format(Money.MAX_UNITS.toLong())})"
                     paidNow > total -> err = "المدفوع أكبر من الإجمالي"
                     else -> onConfirm(units, cost, paidNow)
                 }

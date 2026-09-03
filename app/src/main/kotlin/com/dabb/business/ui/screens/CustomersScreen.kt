@@ -36,7 +36,8 @@ fun CustomersScreen(onOpenCustomer: (String) -> Unit) {
     LaunchedEffect(refreshKey) { viewModel.refreshCustomers() }
 
     val debtors = remember(customers) {
-        customers.filter { it.balancePiasters() > 1L }
+        // إصلاح الفحص M6: > 0L — دَين 1 ريال يظهر في القائمة (كان يُخفى)
+        customers.filter { it.balancePiasters() > 0L }
             .sortedByDescending { it.balancePiasters() }
     }
 
@@ -136,7 +137,8 @@ private fun NewCustomerDialog(onDismiss: () -> Unit, onCreate: (String, String) 
 @Composable
 private fun CustomerRow(c: CustomerEntity, onClick: () -> Unit) {
     val balance = c.balancePiasters()
-    val inDebt = balance > 1L
+    // إصلاح الفحص M6: > 0L — كان يُعرض زبون مدَّين بـ 1 ريال «مسدّد»
+    val inDebt = balance > 0L
     val accent = if (inDebt) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 12.dp),

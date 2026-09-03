@@ -133,4 +133,66 @@ class AppViewModelTest {
         assertTrue("البيع فوق المخزون يجب أن يُرفض", err != null)
         assertEquals(1, db.cylinderDao().getAvailableCount())
     }
+
+    /**
+     * اختبار انحداري للـ P0 (فحص 2026-09-03): recomputeCustomer كانت تستخدم
+     * INSERT OR REPLACE، والحذف الضمني محجوب بـ ON DELETE RESTRICT على sales —
+     * فكان كل بيع/تحصيل/تعديل يُسقط بالمفتاح الأجنبي. هذا الاختبار كان سيفشل
+     * قبل الإصلاح (saleError != null) وهو الذي كان ينقص التغطية.
+     */
+    @Test
+    fun sale_then_update_customer_with_sales_succeeds() = runTest {
+        vm.purchaseFromStation(2, 10_000L, 0L, "").join()
+        val customer = CustomerEntity(
+            id = UUID.randomUUID().toString(), name = "الاسم الأصلي", phone = "",
+            createdAt = System.currentTimeMillis()
+        )
+        var saleError: String? = "لم تُستدع النتيجة"
+        vm.recordSale(customer, 1, 25_000L, payNow = false, notes = "") { saleError = it }.join()
+        assertEquals("البيع يجب أن ينجح", null, saleError)
+
+        var updateError: String? = "لم تُستدع النتيجة"
+        vm.updateCustomer(customer.id, "الاسم الجديد", "777123456") { updateError = it }.join()
+        assertEquals("تعديل زبون له مبيعات يجب أن ينجح", null, updateError)
+        assertEquals("الاسم الجديد", db.customerDao().getById(customer.id)?.name)
+        val sales = db.saleDao().getByCustomer(customer.id)
+        assertEquals(1, sales.size)
+        assertEquals("الاسم الجديد", sales.first().customerName)
+    }
+
+    /**
+     * اختبار انحداري للـ H3 (فحص 2026-09-03): مبالغ بلا سقف كانت تشبع
+     * Math.round عند Long.MAX ثم overflow في units*price — فساد مالي صامت.
+     */
+    @Test
+    fun oversized_price_and_units_are_rejected() = runTest {
+        vm.purchaseFromStation(1, 10_000L, 0L, "").join()
+        val customer = CustomerEntity(
+            id = UUID.randomUUID().toString(), name = "زبون", phone = "",
+            createdAt = System.currentTimeMillis()
+        )
+        var err: String? = null
+        vm.recordSale(customer, 1, com.dabb.business.util.Money.MAX_AMOUNT + 1,
+            payNow = true, notes = "") { err = it }.join()
+        assertNotNull("سعر يتجاوز السقف يجب أن يُرفض", err)
+        assertEquals(0, db.saleDao().getCount())
+
+        var err2: String? = null
+        vm.purchaseFromStation(com.dabb.business.util.Money.MAX_UNITS + 1, 10_000L, 0L, "") {
+            err2 = it
+        }.join()
+        assertNotNull("كمية تتجاوز السقف يجب أن تُرفض", err2)
+    }
+
+    /** سداد المحطة فوق الدَّين يجب أن يُرفض ولا يمس الرصيد. */
+    @Test
+    fun station_payment_over_balance_is_rejected() = runTest {
+        vm.purchaseFromStation(2, 10_000L, 0L, "").join()
+        assertEquals(20_000L, db.stationDao().getStationBalance())
+        var err: String? = null
+        vm.payStation(30_000L, "") { err = it }.join()
+        assertNotNull("سداد أكبر من دَين المحطة يجب أن يُرفض", err)
+        assertEquals(20_000L, db.stationDao().getStationBalance())
+        assertEquals(0, db.stationDao().getPayments().size)
+    }
 }

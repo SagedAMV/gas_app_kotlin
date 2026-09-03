@@ -24,6 +24,10 @@ interface SaleDao {
     @Query("SELECT * FROM sales WHERE id = :id")
     suspend fun getById(id: String): SaleEntity?
 
+    /** عدّاد خفيف لفحص الوجود (بدل تحميل حتى 200 صف). */
+    @Query("SELECT COUNT(*) FROM sales WHERE customerId = :id")
+    suspend fun countForCustomer(id: String): Int
+
     @Query("DELETE FROM sales WHERE id = :id")
     suspend fun deleteById(id: String): Int
 
@@ -61,6 +65,14 @@ interface SaleDao {
 
     @Query("SELECT COUNT(*) FROM sales")
     suspend fun getCount(): Int
+
+    /** بحث خادمي بالاسم أو الملاحظات (200 أحدث) — يصلح البحث الذي كان محصوراً في الصفحات المحمَّلة فقط. */
+    @Query("SELECT * FROM sales WHERE customerName LIKE '%' || :q || '%' OR notes LIKE '%' || :q || '%' ORDER BY saleDate DESC LIMIT 200")
+    suspend fun searchByNameOrNotes(q: String): List<SaleEntity>
+
+    /** نطاق تاريخي (يوم كامل) — لبحث التاريخ في سجل المبيعات. */
+    @Query("SELECT * FROM sales WHERE saleDate >= :from AND saleDate < :to ORDER BY saleDate DESC LIMIT 200")
+    suspend fun getBetween(from: Long, to: Long): List<SaleEntity>
 
     /** إصلاح الخطأ 9: تحديث الاسم المكرر عند تعديل اسم الزبون. */
     @Query("UPDATE sales SET customerName = :name WHERE customerId = :id")

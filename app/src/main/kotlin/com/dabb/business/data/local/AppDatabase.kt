@@ -23,7 +23,7 @@ import com.dabb.business.model.StationPurchaseEntity
         StationPurchaseEntity::class,
         StationPaymentEntity::class
     ],
-    version = 4,
+    version = AppDatabase.VERSION,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -37,6 +37,9 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         @Volatile
         private var INSTANCE: AppDatabase? = null
+
+        /** رقم مخطط Room — يُستخدم في @Database وفي فحص النسخ الاحتياطية. */
+        const val VERSION = 4
 
         const val DB_NAME = "gas_db.sqlite"
 
@@ -52,7 +55,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     DB_NAME
                 )
-                    .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .build()
                 INSTANCE = instance
                 instance
@@ -67,6 +70,41 @@ abstract class AppDatabase : RoomDatabase() {
             synchronized(this) {
                 INSTANCE?.close()
                 INSTANCE = null
+            }
+        }
+
+        /**
+         * ترقية 1 → 2 (إصلاح الفحص H2): الإصدار 1 لم يكن فيه سوى 3 جداول
+         * (cylinders, customers, sales). في v2 أُضيفت جداول payments و
+         * station_purchases وstation_payments، وأُضيف عمود soldDate إلى
+         * cylinders (لحساب ربح الفترة). الأعمدة الأخرى بأسماء مطابقة
+         * (المبالغ REAL قديماً ← تقرأ كأعداد صحيحة بأمان عبر نوع SQLite).
+         * بدون هذه الهجرة كان أي جهاز بـ v1 يسقط عند كل فتح (RoomException)
+         * لأن fallbackToDestructiveMigration أُزيل عمداً.
+         */
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE cylinders ADD COLUMN soldDate INTEGER NOT NULL DEFAULT 0")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `payments` (" +
+                        "`id` TEXT NOT NULL, `customerId` TEXT NOT NULL, " +
+                        "`customerName` TEXT NOT NULL, `amount` INTEGER NOT NULL, " +
+                        "`paymentDate` INTEGER NOT NULL, `notes` TEXT NOT NULL, " +
+                        "PRIMARY KEY(`id`))"
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `station_purchases` (" +
+                        "`id` TEXT NOT NULL, `units` INTEGER NOT NULL, " +
+                        "`costPerUnit` INTEGER NOT NULL, `totalAmount` INTEGER NOT NULL, " +
+                        "`amountPaid` INTEGER NOT NULL, `purchaseDate` INTEGER NOT NULL, " +
+                        "`notes` TEXT NOT NULL, PRIMARY KEY(`id`))"
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `station_payments` (" +
+                        "`id` TEXT NOT NULL, `amount` INTEGER NOT NULL, " +
+                        "`paymentDate` INTEGER NOT NULL, `notes` TEXT NOT NULL, " +
+                        "PRIMARY KEY(`id`))"
+                )
             }
         }
 

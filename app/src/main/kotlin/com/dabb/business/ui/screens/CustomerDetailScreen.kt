@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -45,8 +46,13 @@ fun CustomerDetailScreen(customerId: String, onBack: () -> Unit) {
     var editCustomer by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     var refreshKey by remember { mutableIntStateOf(0) }
+    // إصلاح الفحص M1: خطأ العملية لم يعد يضيع — كان يُتجاهل بـ { _ -> }
+    var opError by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(customerId, refreshKey) { detail = viewModel.getCustomerDetail(customerId) }
+    LaunchedEffect(customerId, refreshKey) {
+        detail = viewModel.getCustomerDetail(customerId)
+        if (refreshKey > 0) opError = null
+    }
 
     val d = detail
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
@@ -75,6 +81,20 @@ fun CustomerDetailScreen(customerId: String, onBack: () -> Unit) {
         }
 
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            // إصلاح الفحص M1: رسالة رفض العملية (مثل "توجد تحصيلات لاحقة")
+            // كانت تُبلع صامتاً فيُظن المستخدم أن الإلغاء تم.
+            opError?.let { msg ->
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.errorContainer).padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.Warning, null, tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(msg, color = MaterialTheme.colorScheme.onErrorContainer,
+                        style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { opError = null }) { Text("إغلاق") }
+                }
+            }
             StaggeredReveal(0) {
                 Card(
                     shape = RoundedCornerShape(20.dp),
@@ -178,13 +198,15 @@ fun CustomerDetailScreen(customerId: String, onBack: () -> Unit) {
             initialName = d.customer?.name ?: "",
             initialPhone = d.customer?.phone ?: "",
             onDismiss = { editCustomer = false },
-            onSave = { name, phone ->
-                scope.launch {
-                    viewModel.updateCustomer(customerId, name, phone) { e ->
-                        if (e == null) { editCustomer = false; refreshKey++ }
+                onSave = { name, phone ->
+                    scope.launch {
+                        // إصلاح الفحص M1: فشل التعديل (كان P0) لم يعد صامتاً
+                        viewModel.updateCustomer(customerId, name, phone) { e ->
+                            if (e == null) { editCustomer = false; refreshKey++ }
+                            else opError = e
+                        }
                     }
                 }
-            }
         )
     }
 
@@ -194,14 +216,18 @@ fun CustomerDetailScreen(customerId: String, onBack: () -> Unit) {
             shape = RoundedCornerShape(20.dp),
             title = { Text("إلغاء هذا البيع؟") },
             text = { Text("ستُرجَع ${sale.unitsSold} أسطوانة إلى المخزون وتُخصم قيمة البيع (${Money.format(sale.totalAmount)} ج) من دين/مدفوعات الزبون.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    scope.launch {
-                        viewModel.cancelSale(sale.id) { _ -> confirmCancelSale = null; refreshKey++ }
-                    }
-                }) { Text("نعم، إلغاء البيع", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold) }
-            },
-            dismissButton = { TextButton(onClick = { confirmCancelSale = null }) { Text("تراجع") } }
+                confirmButton = {
+                    TextButton(onClick = {
+                        scope.launch {
+                            viewModel.cancelSale(sale.id) { err ->
+                                confirmCancelSale = null
+                                if (err != null) opError = err
+                                refreshKey++
+                            }
+                        }
+                    }) { Text("نعم، إلغاء البيع", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold) }
+                },
+                dismissButton = { TextButton(onClick = { confirmCancelSale = null }) { Text("تراجع") } }
         )
     }
 
@@ -211,14 +237,18 @@ fun CustomerDetailScreen(customerId: String, onBack: () -> Unit) {
             shape = RoundedCornerShape(20.dp),
             title = { Text("عكس هذه الدفعة؟") },
             text = { Text("ستُعاد قيمة ${Money.format(p.amount)} ج كدَين على الزبون (لحالة تسجيل دفعة خاطئة).") },
-            confirmButton = {
-                TextButton(onClick = {
-                    scope.launch {
-                        viewModel.reverseCustomerPayment(p.id) { _ -> confirmReversePayment = null; refreshKey++ }
-                    }
-                }) { Text("نعم، عكس الدفعة", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold) }
-            },
-            dismissButton = { TextButton(onClick = { confirmReversePayment = null }) { Text("تراجع") } }
+                confirmButton = {
+                    TextButton(onClick = {
+                        scope.launch {
+                            viewModel.reverseCustomerPayment(p.id) { err ->
+                                confirmReversePayment = null
+                                if (err != null) opError = err
+                                refreshKey++
+                            }
+                        }
+                    }) { Text("نعم، عكس الدفعة", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold) }
+                },
+                dismissButton = { TextButton(onClick = { confirmReversePayment = null }) { Text("تراجع") } }
         )
     }
 
@@ -228,17 +258,18 @@ fun CustomerDetailScreen(customerId: String, onBack: () -> Unit) {
             shape = RoundedCornerShape(20.dp),
             title = { Text("حذف الزبون؟") },
             text = { Text("يُحذف الزبون نهائياً. لا يمكن الحذف إذا كانت له أي عملية بيع أو دفعة (تُلغى عملياته أولاً).") },
-            confirmButton = {
-                TextButton(onClick = {
-                    scope.launch {
-                        viewModel.deleteCustomer(customerId) { e ->
-                            confirmDelete = false
-                            if (e == null) onBack()
+                confirmButton = {
+                    TextButton(onClick = {
+                        scope.launch {
+                            viewModel.deleteCustomer(customerId) { e ->
+                                confirmDelete = false
+                                if (e == null) onBack()
+                                else opError = e
+                            }
                         }
-                    }
-                }) { Text("حذف", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold) }
-            },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("تراجع") } }
+                    }) { Text("حذف", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold) }
+                },
+                dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("تراجع") } }
         )
     }
 }

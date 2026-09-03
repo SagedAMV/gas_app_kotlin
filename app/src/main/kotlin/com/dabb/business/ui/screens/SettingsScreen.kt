@@ -40,6 +40,7 @@ fun SettingsScreen() {
 
     var priceText by remember { mutableStateOf(Money.format(viewModel.defaultPricePiasters)) }
     var savedMsg by remember { mutableStateOf(false) }
+    var priceErr by remember { mutableStateOf<String?>(null) }
     var pinSet by remember { mutableStateOf(store.isPinSet) }
     var pinDialog by remember { mutableStateOf(false) }
     var busyMsg by remember { mutableStateOf<String?>(null) }
@@ -83,19 +84,24 @@ fun SettingsScreen() {
                         Text("السعر الافتراضي للأسطوانة", style = MaterialTheme.typography.titleSmall)
                         OutlinedTextField(
                             value = priceText,
-                            onValueChange = { priceText = it.filter { ch -> ch.isDigit() || ch == '.' } },
+                            // إصلاح الفحص H3: حد 11 خانة — بلا حد كان يُدخل Long.MAX
+                            onValueChange = { priceText = it.filter { ch -> ch.isDigit() || ch == '.' }.take(11) },
                             label = { Text("السعر (ريال)") }, singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()
                         )
                         Button(onClick = {
                             val p = Money.poundsToPiasters(priceText)
-                            if (p > 0) { viewModel.setDefaultPrice(p); savedMsg = true }
+                            // إصلاح الفحص M1: السعر الفارغ/الصفر لم يعد يُبلع صامتاً
+                            if (p > 0) { viewModel.setDefaultPrice(p); savedMsg = true; priceErr = null }
+                            else priceErr = "أدخل سعراً أكبر من صفر"
                         }, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
                             Text("حفظ السعر الافتراضي")
                         }
                         if (savedMsg) Text("تم الحفظ", style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.primary)
+                        if (priceErr != null) Text(priceErr!!, style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error)
                     }
                 }
             }

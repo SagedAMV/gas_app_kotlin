@@ -4,12 +4,20 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Update
 import com.dabb.business.model.CustomerEntity
 
 @Dao
 interface CustomerDao {
+    /** يُستخدم فقط لإنشاء زبون جديد (لا مبيعات بعد ← لا أطفال على المفتاح الأجنبي).
+     *  ⚠️ محظور استخدامه لتحديث زبون له مبيعات: REPLACE = حذف ضمني ثم إدراج،
+     *  والحذف يُحجَب بـ ON DELETE RESTRICT على sales.customerId فيفشل (P0). */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrUpdate(c: CustomerEntity)
+
+    /** تحديث آمن: UPDATE عادي لا يحذف الصف ← لا يلمس المفتاح الأجنبي (إصلاح P0). */
+    @Update
+    suspend fun update(c: CustomerEntity)
 
     @Query("SELECT * FROM customers WHERE id = :id")
     suspend fun getById(id: String): CustomerEntity?
@@ -20,7 +28,8 @@ interface CustomerDao {
     @Query("SELECT * FROM customers WHERE name = :name COLLATE NOCASE LIMIT 1")
     suspend fun findByName(name: String): CustomerEntity?
 
-    @Query("SELECT * FROM customers WHERE name LIKE '%' || :q || '%' OR phone LIKE '%' || :q || '%' ORDER BY name COLLATE NOCASE ASC")
+    /** إصلاح الخطأ 10: ‏LIMIT 50 — اقتراحات البحث تكفي بها عشرات (حماية الذاكرة). */
+    @Query("SELECT * FROM customers WHERE name LIKE '%' || :q || '%' OR phone LIKE '%' || :q || '%' ORDER BY name COLLATE NOCASE ASC LIMIT 50")
     suspend fun search(q: String): List<CustomerEntity>
 
     /** المدينون: كاش الحقول يطابق الرصيد المشتق (يُعاد حسابه في المعاملات).

@@ -29,6 +29,10 @@ interface PaymentDao {
     @Query("SELECT * FROM payments WHERE id = :id")
     suspend fun getById(id: String): PaymentEntity?
 
+    /** عدّاد خفيف لفحص الوجود (بدل تحميل حتى 200 صف). */
+    @Query("SELECT COUNT(*) FROM payments WHERE customerId = :id")
+    suspend fun countForCustomer(id: String): Int
+
     @Query("DELETE FROM payments WHERE id = :id")
     suspend fun deleteById(id: String): Int
 

@@ -58,6 +58,10 @@ fun ReportsScreen(
     val totalCost = viewModel.totalCost
     val profit = viewModel.profit
     val stationDebt = viewModel.stationBalance
+    // إصلاح الفحص M2: الدين والدونات «حالة حالية» (كل الفترات) —
+    // فلترة الفترة كانت تُنتج «ديناً سالباً» عند تحصيل دين قديم.
+    val allTimePaid = viewModel.allTimePaid
+    val allTimeSales = viewModel.allTimeSales
     val debtors = viewModel.topDebtors
     val period = viewModel.reportPeriod
     var refreshing by remember { mutableStateOf(false) }
@@ -103,9 +107,9 @@ fun ReportsScreen(
             }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 StatTile(Icons.Filled.Payments, MaterialTheme.colorScheme.tertiary,
-                    { MoneyTile(totalPaid) }, "المحصّل", Modifier.weight(1f))
+                    { MoneyTile(totalPaid) }, "المحصّل (${period.label})", Modifier.weight(1f))
                 StatTile(Icons.Filled.Schedule, MaterialTheme.colorScheme.error,
-                    { MoneyTile(totalCredit) }, "الدين المتبقّي", Modifier.weight(1f), pulse = true)
+                    { MoneyTile(totalCredit) }, "الدين المتبقّي (كامل)", Modifier.weight(1f), pulse = true)
             }
 
             // الربح ودَين المحطة
@@ -122,7 +126,8 @@ fun ReportsScreen(
                                 style = MaterialTheme.typography.titleMedium, color = SuccessGreen)
                             Text(" ريال", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 4.dp))
                         }
-                        if (stationDebt > 1L) MoneyLine("دَين المحطة (المورد)", stationDebt,
+                        // إصلاح الفحص M6: > 0L — دَين 1 ريال يُعرض (كان يُخفى)
+                        if (stationDebt > 0L) MoneyLine("دَين المحطة (المورد)", stationDebt,
                             color = MaterialTheme.colorScheme.error)
                     }
                 }
@@ -133,16 +138,16 @@ fun ReportsScreen(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                         DonutChart(
-                            paid = Money.piastersToPounds(totalPaid),
+                            paid = Money.piastersToPounds(allTimePaid),
                             credit = Money.piastersToPounds(totalCredit),
                             modifier = Modifier.size(104.dp)
                         )
                         Spacer(Modifier.width(18.dp))
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("التحصيل", style = MaterialTheme.typography.titleSmall)
-                            LegendDot(MaterialTheme.colorScheme.primary, "مدفوع: ${Money.format(totalPaid)} ريال")
+                            Text("التحصيل (كل الفترات)", style = MaterialTheme.typography.titleSmall)
+                            LegendDot(MaterialTheme.colorScheme.primary, "مدفوع: ${Money.format(allTimePaid)} ريال")
                             LegendDot(MaterialTheme.colorScheme.error, "دين: ${Money.format(totalCredit)} ريال")
-                            Text("من إجمالي مبيعات ${Money.format(totalPaid + totalCredit)} ريال",
+                            Text("من إجمالي مبيعات ${Money.format(allTimeSales)} ريال",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }

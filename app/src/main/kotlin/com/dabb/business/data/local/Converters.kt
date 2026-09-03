@@ -5,16 +5,11 @@ import com.dabb.business.model.CylinderStatus
 import com.dabb.business.model.SaleStatus
 
 /**
- * تحويلات Room: قوائم المعرّفات (لإرجاع/تتبّع أسطوانات عملية ملغاة) + الحالات enum.
+ * تحويلات Room: حالات enum كاسم الحالة.
+ * (محوّلا List<String> كانا كوداً ميتاً — الكيانات تخزن cylinderIdsJson نصاً
+ *  مباشرة — أُزيلتا في الفحص L11.)
  */
 class Converters {
-    @TypeConverter
-    fun fromStringList(value: List<String>): String = value.joinToString(",")
-
-    @TypeConverter
-    fun toStringList(value: String): List<String> =
-        if (value.isBlank()) emptyList() else value.split(",").filter { it.isNotBlank() }
-
     @TypeConverter
     fun cylinderStatusToString(s: CylinderStatus): String = s.name
 

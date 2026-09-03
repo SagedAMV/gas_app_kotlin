@@ -22,9 +22,10 @@ import com.dabb.business.ui.animation.StaggeredReveal
 import com.dabb.business.ui.components.AppHeader
 import com.dabb.business.ui.viewmodel.AppViewModel
 import com.dabb.business.util.Money
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
-import java.util.Date
+import java.util.Calendar
 import java.util.Locale
 
 /**
@@ -46,26 +47,25 @@ fun SalesHistoryScreen() {
     var confirmCancel by remember { mutableStateOf<SaleEntity?>(null) }
     var refreshKey by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(refreshKey) {
-        totalCount = viewModel.getSalesCount()
-        val first = viewModel.getSalesPaged(pageSize, 0)
-        sales = first
-        canLoadMore = first.size == pageSize
-        if (refreshKey > 0) opError = null
-    }
-
-    // تصفية البحث — الاسم أو الملاحظات أو التاريخ المكتوب (yyyy/M/d)
-    val filtered = remember(sales, query) {
+    // إصلاح الفحص L13: البحث على مستوى القاعدة (اسم/ملاحظات) أو نطاق يومي كامل —
+    // كان محصوراً في الصفحات المحمَّلة فقط فـ"لا نتائج" كانت مضللة.
+    // التأخير 250ms يعمل debounce طبيعياً (أثران متتاليان يعيدان جدولة التاخير).
+    LaunchedEffect(refreshKey, query) {
+        if (query.isNotBlank()) delay(250)
         val q = query.trim()
-        if (q.isEmpty()) sales
-        else {
-            val fmt = SimpleDateFormat("yyyy/M/d", Locale.getDefault())
-            sales.filter {
-                it.customerName.contains(q, true) ||
-                    it.notes.contains(q, true) ||
-                    fmt.format(Date(it.saleDate)).contains(q, true)
-            }
+        if (q.isEmpty()) {
+            totalCount = viewModel.getSalesCount()
+            val first = viewModel.getSalesPaged(pageSize, 0)
+            sales = first
+            canLoadMore = first.size == pageSize
+        } else {
+            val dayRange = parseSaleDay(q)
+            sales = if (dayRange != null) viewModel.getSalesBetween(dayRange.first, dayRange.second)
+                    else viewModel.searchSalesByNameOrNotes(q)
+            totalCount = sales.size
+            canLoadMore = false
         }
+        if (refreshKey > 0) opError = null
     }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
@@ -93,15 +93,15 @@ fun SalesHistoryScreen() {
             }
 
             StaggeredReveal(0) {
-                Card(shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                    if (filtered.isEmpty()) {
-                        EmptyHint(
-                            if (query.isBlank()) "لا توجد مبيعات بعد — سجّل أول عملية من تبويب «الصرف»"
-                            else "لا نتائج مطابقة لبحثك"
-                        )
-                    } else {
-                        filtered.forEachIndexed { i, sale ->
+                    Card(shape = RoundedCornerShape(18.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                        if (sales.isEmpty()) {
+                            EmptyHint(
+                                if (query.isBlank()) "لا توجد مبيعات بعد — سجّل أول عملية من تبويب «الصرف»"
+                                else "لا نتائج مطابقة لبحثك في قاعدة البيانات"
+                            )
+                        } else {
+                            sales.forEachIndexed { i, sale ->
                             Row(
                                 Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically
@@ -122,7 +122,7 @@ fun SalesHistoryScreen() {
                                         tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
                                 }
                             }
-                            if (i < filtered.lastIndex) DividerSoft()
+                            if (i < sales.lastIndex) DividerSoft()
                         }
                     }
                 }
@@ -167,4 +167,23 @@ fun SalesHistoryScreen() {
             dismissButton = { TextButton(onClick = { confirmCancel = null }) { Text("تراجع") } }
         )
     }
+}
+
+/** يحلل التاريخ المكتوب (2026/9/2 أو 2026/09/02) إلى نطاق اليوم الكامل (من 00:00 حتى 24:00). */
+private fun parseSaleDay(q: String): Pair<Long, Long>? {
+    for (fmt in listOf("yyyy/M/d", "yyyy/MM/dd")) {
+        val sdf = SimpleDateFormat(fmt, Locale.getDefault())
+        sdf.isLenient = false
+        val d = try { sdf.parse(q) } catch (e: Exception) { null } ?: continue
+        val cal = Calendar.getInstance().apply {
+            time = d
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val from = cal.timeInMillis
+        return from to from + 24L * 3600 * 1000
+    }
+    return null
 }

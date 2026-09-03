@@ -21,6 +21,7 @@ import com.dabb.business.model.SaleEntity
 import com.dabb.business.model.SaleStatus
 import com.dabb.business.model.StationPaymentEntity
 import com.dabb.business.model.StationPurchaseEntity
+import com.dabb.business.util.Money
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -33,9 +34,19 @@ import java.util.concurrent.atomic.AtomicBoolean
 enum class ReportPeriod(val label: String) {
     ALL("الكل"), MONTH("الشهر"), WEEK("الأسبوع"), DAY("اليوم");
 
+    /** إصلاح الفحص L17: "اليوم" = من منتصف الليل المحلي (كما يتوقعه المستخدم)
+     *  وليس آخر 24 ساعة. الأسبوع/الشهر نافذة متدحرجة مقصودة. */
     fun startMillis(now: Long = System.currentTimeMillis()): Long = when (this) {
         ALL -> 0L
-        DAY -> now - 24L * 3600 * 1000
+        DAY -> {
+            val cal = java.util.Calendar.getInstance()
+            cal.timeInMillis = now
+            cal.set(java.util.Calendar.HOUR_OF_DAY, 0)
+            cal.set(java.util.Calendar.MINUTE, 0)
+            cal.set(java.util.Calendar.SECOND, 0)
+            cal.set(java.util.Calendar.MILLISECOND, 0)
+            cal.timeInMillis
+        }
         WEEK -> now - 7L * 24 * 3600 * 1000
         MONTH -> now - 30L * 24 * 3600 * 1000
     }
@@ -76,6 +87,12 @@ class AppViewModel internal constructor(
     var totalCost by mutableStateOf(0L); private set
     var profit by mutableStateOf(0L); private set
     var stationBalance by mutableStateOf(0L); private set
+
+    /** ماليات "الكل" (خارج الفلترة) — إصلاح الفحص M2: «الدين المتبقي» بلا
+     *  فلترة فترة فلا يصبح سالباً عند تحصيل دين قديم داخل الفترة.
+     *  الدونات والدين المتبقي تستخدمها لأنها "حالة حالية" لا "حركة فترة". */
+    var allTimeSales by mutableStateOf(0L); private set
+    var allTimePaid by mutableStateOf(0L); private set
 
     var recentSales by mutableStateOf<List<SaleEntity>>(emptyList()); private set
     var allSales by mutableStateOf<List<SaleEntity>>(emptyList()); private set
@@ -123,10 +140,17 @@ class AppViewModel internal constructor(
         }
         totalSales = salesTotal
         totalPaid = salePaid + collections
-        totalCredit = salesTotal - totalPaid
         totalCost = cost
         profit = salesTotal - cost
         stationBalance = stationDao.getStationBalance()
+        // «الدين المتبقي» = الدَّين الحالي الكلي (بلا فلترة فترة):
+        // كل ما بِيع − كل ما حُصِّل (عند البيع + التحصيلات اللاحقة).
+        // لا يمكن أن يكون سالباً: التحصيل فوق الرصيد مرفوض في المعاملة.
+        val allSales = saleDao.getTotalSales()
+        val allPaid = saleDao.getSaleAmountPaid() + payDao.getTotalCollections()
+        allTimeSales = allSales
+        allTimePaid = allPaid
+        totalCredit = (allSales - allPaid).coerceAtLeast(0L)
     }
 
     fun refreshRecent() = launch {
@@ -142,6 +166,14 @@ class AppViewModel internal constructor(
         saleDao.getPaged(limit, offset)
 
     suspend fun getSalesCount(): Int = saleDao.getCount()
+
+    /** إصلاح الفحص L13: بحث على مستوى القاعدة — الاسم أو الملاحظات. */
+    suspend fun searchSalesByNameOrNotes(q: String): List<SaleEntity> =
+        saleDao.searchByNameOrNotes(q.trim())
+
+    /** نطاق يومي كامل (لبحث التاريخ في سجل المبيعات). */
+    suspend fun getSalesBetween(from: Long, to: Long): List<SaleEntity> =
+        saleDao.getBetween(from, to)
 
     fun refreshDebtors() = launch { topDebtors = custDao.getCustomersWithDebt().take(3) }
 
@@ -169,7 +201,9 @@ class AppViewModel internal constructor(
             db.withTransaction {
                 val c = custDao.getById(id) ?: error("الزبون غير موجود")
                 val newName = name.trim()
-                custDao.insertOrUpdate(c.copy(name = newName, phone = phone.trim()))
+                // إصلاح P0: UPDATE — REPLACE كان يُسقط التعديل لأي زبون له مبيعات
+                // (حذف ضمني محجوب بـ ON DELETE RESTRICT) بلا أي رسالة واضحة.
+                custDao.update(c.copy(name = newName, phone = phone.trim()))
                 // إصلاح الخطأ 9: الاسم مكرر في sales وpayments — يُحدَّث فيهما
                 // أيضاً حتى لا تظهر التقارير والسجلات أسماء قديمة.
                 saleDao.updateCustomerName(id, newName)
@@ -182,9 +216,8 @@ class AppViewModel internal constructor(
     fun deleteCustomer(id: String, onResult: (String?) -> Unit = {}) = launch {
         runOp(onResult) {
             db.withTransaction {
-                val sales = saleDao.getByCustomer(id)
-                val payments = payDao.getByCustomer(id)
-                if (sales.isNotEmpty() || payments.isNotEmpty())
+                // عدّاد خفيف بدل تحميل حتى 200 صف (الفحص L12)
+                if (saleDao.countForCustomer(id) > 0 || payDao.countForCustomer(id) > 0)
                     error("لا يمكن حذف زبون له عمليات بيع أو دفعات. ألغِ عملياته أولاً")
                 custDao.deleteById(id)
             }
@@ -216,15 +249,18 @@ class AppViewModel internal constructor(
         payNow: Boolean, notes: String, onResult: (String?) -> Unit = {}
     ) = launch {
         runOp(onResult) {
-            require(units > 0 && pricePiasters > 0) { "أدخل عدداً وسعراً صحيحين" }
+            require(units > 0 && pricePiasters in 1..Money.MAX_AMOUNT) {
+                "أدخل عدداً وسعراً صحيحين (السعر الأقصى ${Money.format(Money.MAX_AMOUNT)} ريال)"
+            }
             val available = cylDao.getAvailableCount()
             if (available < units) error("المخزون لا يكفي — المتوفر $available أسطوانة فقط")
 
             val existing = custDao.getById(customer.id) ?: custDao.findByName(customer.name.trim())
             val custId = existing?.id ?: customer.id
             val base = existing ?: customer
-            // طابع زمني موحّد للأسطوانات والبيع — أساس المطابقة الدقيقة عند الإلغاء (المشكلة 2)
-            val now = System.currentTimeMillis()
+            // طابع زمني موحّد فريد للأسطوانات والبيع — أساس المطابقة الدقيقة
+            // عند الإلغاء (المشكلة 2 + تحصين الفحص L9 ضد تصادم ميلي ثانية)
+            val now = freshNow()
 
             db.withTransaction {
                 // إصلاح المشكلة 1: الزبون الجديد القادم من شاشة الصرف كان لا يُحفظ —
@@ -265,7 +301,7 @@ class AppViewModel internal constructor(
     fun recordCustomerPayment(customerId: String, amountPiasters: Long, notes: String,
                               onResult: (String?) -> Unit = {}) = launch {
         runOp(onResult) {
-            require(amountPiasters > 0) { "أدخل مبلغاً أكبر من صفر" }
+            require(amountPiasters in 1..Money.MAX_AMOUNT) { "أدخل مبلغاً صحيحاً" }
             val customer = custDao.getById(customerId) ?: error("الزبون غير موجود")
             val balance = saleDao.getCustomerBalance(customerId)
             if (balance <= 0) error("لا يوجد دَين على هذا الزبون")
@@ -277,7 +313,7 @@ class AppViewModel internal constructor(
                         customerId = customerId,
                         customerName = customer.name,
                         amount = amountPiasters,
-                        paymentDate = System.currentTimeMillis(),
+                        paymentDate = freshNow(),
                         notes = notes.trim()
                     )
                 )
@@ -332,10 +368,15 @@ class AppViewModel internal constructor(
     fun purchaseFromStation(units: Int, costPiasters: Long, paidNowPiasters: Long,
                             notes: String, onResult: (String?) -> Unit = {}) = launch {
         runOp(onResult) {
-            require(units > 0 && costPiasters > 0) { "أدخل عدداً وتكلفة صحيحين" }
+            require(units in 1..Money.MAX_UNITS) { "أدخل عدداً صحيحاً (الحد الأقصى ${Money.format(Money.MAX_UNITS.toLong())})" }
+            require(costPiasters in 1..Money.MAX_AMOUNT) {
+                "التكلفة خارج النطاق المسموح (الحد الأقصى ${Money.format(Money.MAX_AMOUNT)} ريال)"
+            }
             val total = units.toLong() * costPiasters
-            require(paidNowPiasters <= total) { "المدفوع أكبر من الإجمالي" }
-            val now = System.currentTimeMillis()
+            // إصلاح الفحص H3: النطاق [0, total] — القيمة السالبة كانت تمرّ
+            // (الفحص كان <= total فقط) فتضخّم دَين المحطة صامتاً.
+            require(paidNowPiasters in 0..total) { "المدفوع خارج النطاق المسموح" }
+            val now = freshNow()
             // إصلاح الخطأ 3: معرّف السحب يُولَّد أولاً ويُختم على كل أسطوانة —
             // الرابط الصريح يلغي التباس acquiredDate المتطابق بين سحبتين.
             val purchaseId = UUID.randomUUID().toString()
@@ -370,7 +411,7 @@ class AppViewModel internal constructor(
 
     fun payStation(amountPiasters: Long, notes: String, onResult: (String?) -> Unit = {}) = launch {
         runOp(onResult) {
-            require(amountPiasters > 0) { "أدخل مبلغاً أكبر من صفر" }
+            require(amountPiasters in 1..Money.MAX_AMOUNT) { "أدخل مبلغاً صحيحاً" }
             val balance = stationDao.getStationBalance()
             if (balance <= 0) error("لا يوجد دَين للمحطة")
             if (amountPiasters > balance) error("المبلغ أكبر من دَين المحطة")
@@ -379,7 +420,7 @@ class AppViewModel internal constructor(
                     StationPaymentEntity(
                         id = UUID.randomUUID().toString(),
                         amount = amountPiasters,
-                        paymentDate = System.currentTimeMillis(),
+                        paymentDate = freshNow(),
                         notes = notes.trim()
                     )
                 )
@@ -453,31 +494,100 @@ class AppViewModel internal constructor(
             // أي كتابة — النسخ فوق قاعدة مفتوحة يفسد الملف.
             AppDatabase.shutdown()
             val dst = ctx.getDatabasePath(AppDatabase.DB_NAME)
+            val incoming = File(dst.path + ".incoming")
+            val backup = File(dst.path + ".bak")
+            // إصلاح الفحص M4: الملف المستورد يُكتب مؤقتاً أولاً — لا نلمس
+            // القاعدة الحية حتى يثبت صلاحية النسخة.
+            ctx.contentResolver.openInputStream(uri)?.use { input ->
+                incoming.outputStream().use { input.copyTo(it) }
+            } ?: error("تعذّر فتح ملف النسخة")
+            validateBackupFile(incoming)?.let { problem ->
+                incoming.delete()
+                error(problem)
+            }
+            // نسخة الأمان القديمة تُحذف (الحالية سليمة الآن وسيؤمَّن ما بعدها).
+            backup.delete()
+            if (dst.exists()) dst.copyTo(backup, overwrite = true)
             // القاعدة تعمل بوضع WAL — حذف الملفين المساعدين وإلا أُفسدت النسخة الجديدة.
             File(dst.path + "-wal").delete()
             File(dst.path + "-shm").delete()
-            ctx.contentResolver.openInputStream(uri)?.use { input ->
-                dst.outputStream().use { input.copyTo(it) }
-            } ?: error("تعذّر فتح ملف النسخة")
+            if (!incoming.renameTo(dst)) incoming.copyTo(dst, overwrite = true)
+            incoming.delete()
             // إعادة تشغيل التطبيق ليفتح القاعدة الجديدة من الصفر بحالة نظيفة.
             val intent = ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)?.apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
             } ?: error("تعذّر تحضير إعادة التشغيل")
             ctx.startActivity(intent)
             // إصلاح الخطأ 4: ‏startActivity غير متزامن — الخروج الفوري قد يقتل
-            // العملية قبل انطلاق النشاط الجديد. مهلة 500ms تكفي لتسليم القصد للنظام.
+            // العملية قبل انطلاق النشاط الجديد. إصلاح الفحص L14: مهلة ثانية
+            // كاملة (500ms قصرت على الأجهزة البطيئة فغلق التطبيق بلا إعادة فتح).
             Handler(Looper.getMainLooper()).postDelayed({
                 Runtime.getRuntime().exit(0)
-            }, 500)
+            }, 1000)
         }.exceptionOrNull()?.message
     }
 
+    /**
+     * إصلاح الفحص M4: فحص النسخة قبل الكتابة — ملف تالف أو غير صالح (المخزن
+     * يقبل أي نوع من الملفات) لم يعد يمسح البيانات الأصلية.
+     * يعيد رسالة المشكلة، أو null إن كانت صالحة.
+     */
+    private fun validateBackupFile(file: File): String? {
+        if (!file.exists() || file.length() == 0L) return "ملف النسخة الاحتياطية فارغ"
+        return try {
+            android.database.sqlite.SQLiteDatabase
+                .openDatabase(file.path, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY)
+                .use { db ->
+                    val ok = db.rawQuery("PRAGMA integrity_check", null).use { c ->
+                        c.moveToFirst() && c.getString(0) == "ok"
+                    }
+                    if (!ok) return@use "ملف النسخة فاسد (فحص السلامة فشل)"
+                    val version = db.rawQuery("PRAGMA user_version", null).use { c ->
+                        if (c.moveToFirst()) c.getInt(0) else 0
+                    }
+                    if (version !in 1..AppDatabase.VERSION)
+                        return@use "إصدار النسخة غير مدعوم (v$version — هذا التطبيق يدعم v1 إلى v${AppDatabase.VERSION})"
+                    val tables = db.rawQuery(
+                        "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN " +
+                            "('cylinders','customers','sales','payments','station_purchases','station_payments')",
+                        null
+                    ).use { c ->
+                        val s = mutableSetOf<String>()
+                        while (c.moveToNext()) s.add(c.getString(0))
+                        s
+                    }
+                    if (tables.size != 6)
+                        return@use "ملف النسخة ناقص الجداول (المتوقع 6 — وُجد ${tables.size})"
+                    null
+                }
+        } catch (e: Exception) {
+            "الملف المحدد ليس قاعدة بيانات صالحة"
+        }
+    }
+
     // ===== أدوات داخلية =====
+
+    /**
+     * طابع زمني فريد ومتزايد (حماية من تصادم ميلي ثانية):
+     * فحص L9 أثبت أن بيعين بنفس soldDate يفشلان في عزل الإلغاء، وأن تحصيل
+     * بنفس طابع البيع لا يُعد «لاحقاً». عبر الواجهة غير قابل للتحقيق
+     * عملياً، لكن هذا السطر يغلق الفجوة جذرياً بلا تغيير مخطط.
+     */
+    private var lastTimestamp = 0L
+
+    private fun freshNow(): Long = synchronized(this) {
+        val next = maxOf(System.currentTimeMillis(), lastTimestamp + 1)
+        lastTimestamp = next
+        next
+    }
+
     private suspend fun recomputeCustomer(id: String) {
         val c = custDao.getById(id) ?: return
         val debt = saleDao.getCustomerSalesTotal(id)
         val paid = saleDao.getCustomerSalePaid(id) + payDao.getCustomerCollections(id)
-        custDao.insertOrUpdate(c.copy(totalDebt = debt, totalPaid = paid))
+        // إصلاح P0: UPDATE بدل INSERT OR REPLACE — REPLACE حذف ضمني محجوب
+        // بـ RESTRICT على sales، فكان كل بيع/تحصيل/إلغاء يسقط كاملاً.
+        custDao.update(c.copy(totalDebt = debt, totalPaid = paid))
     }
 
     /** إصلاح الخطأ 8: تُعيد Job — فيمكن للانتظار (join) في الاختبارات أن يترجم. */
