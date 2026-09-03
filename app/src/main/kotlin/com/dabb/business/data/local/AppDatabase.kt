@@ -103,6 +103,8 @@ abstract class AppDatabase : RoomDatabase() {
                 )
                 db.execSQL("DROP TABLE sales")
                 db.execSQL("ALTER TABLE sales_new RENAME TO sales")
+                // فهرس المفتاح الأجنبي — يمنع فحص الجدول كاملاً (تحذير Room)
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_sales_customerId` ON `sales` (`customerId`)")
             }
         }
     }

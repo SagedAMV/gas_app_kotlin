@@ -437,7 +437,7 @@ class AppViewModel internal constructor(
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
             } ?: error("تعذّر تحضير إعادة التشغيل")
             ctx.startActivity(intent)
-            Runtime.getRuntime().exitProcess(0)
+            Runtime.getRuntime().exit(0)
         }.exceptionOrNull()?.message
     }
 
