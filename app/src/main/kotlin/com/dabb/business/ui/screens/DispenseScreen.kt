@@ -61,6 +61,8 @@ fun DispenseScreen() {
     var units by remember { mutableStateOf(1) }
     var priceText by remember { mutableStateOf<String?>(null) }
     var payNow by remember { mutableStateOf(false) }
+    // إصلاح الفحص 4: دفعة جزئية وقت البيع (تظهر عند اختيار «بالأجل»).
+    var partialText by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
     var phoneForNew by remember { mutableStateOf("") }
     var shakeKey by remember { mutableIntStateOf(0) }
@@ -76,6 +78,8 @@ fun DispenseScreen() {
     // آلاف ("25,000") وtoDoubleOrNull لا يفهمها — فكان البيع يفشل دائماً دون لمس الحقل.
     val pricePiasters = Money.poundsToPiasters(effPrice.replace(",", ""))
     val totalPiasters = units.toLong() * pricePiasters
+    // إصلاح الفحص 4: المدفوع الآن = كامل المبلغ (سدد الآن) أو الدفعة الجزئية أو 0.
+    val paidNowPiasters = if (payNow) totalPiasters else Money.poundsToPiasters(partialText)
     val stockShort = units > available
 
     LaunchedEffect(customerQuery) {
@@ -91,7 +95,7 @@ fun DispenseScreen() {
             delay(1500)
             showSuccess = false
             customerQuery = ""; results = emptyList(); selectedCustomer = null
-            phoneForNew = ""; units = 1; priceText = null; payNow = false; notes = ""; errorText = null
+            phoneForNew = ""; units = 1; priceText = null; payNow = false; partialText = ""; notes = ""; errorText = null
         }
     }
 
@@ -250,6 +254,12 @@ fun DispenseScreen() {
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()
                     )
+                    // إصلاح الفحص 82: سعر 0 = منحة/عينة — مسموح ومُعلن بوضوح قبل التأكيد.
+                    if (pricePiasters == 0L) Text(
+                        "سعر 0 = منحة/عينة (بيع بلا مقابل)",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.tertiary
+                    )
                 }
             }
 
@@ -262,6 +272,16 @@ fun DispenseScreen() {
                     { payNow = true }, Modifier.weight(1f))
                 SegOption("بالأجل", !payNow, MaterialTheme.colorScheme.error, Icons.Filled.Schedule,
                     { payNow = false }, Modifier.weight(1f))
+            }
+            // إصلاح الفحص 4: حقل الدفعة الجزئية — يظهر فقط عند اختيار «بالأجل».
+            AnimatedVisibility(visible = !payNow) {
+                OutlinedTextField(
+                    value = partialText,
+                    onValueChange = { partialText = it.filter { ch -> ch.isDigit() || ch == '.' }.take(11) },
+                    label = { Text("دفعة جزئية الآن (اختياري)") }, singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()
+                )
             }
 
             OutlinedTextField(value = notes, onValueChange = { notes = it },
@@ -301,12 +321,14 @@ fun DispenseScreen() {
                         errorText = null
                         when {
                             selectedCustomer == null -> { errorText = "اختر الزبون أو أنشئه أولاً"; shakeKey++ }
-                            units <= 0 || pricePiasters <= 0 -> { errorText = "أدخل عدداً وسعراً صحيحين"; shakeKey++ }
+                            units <= 0 -> { errorText = "أدخل عدداً صحيحاً"; shakeKey++ }
+                            // (السعر 0 مسموح — منحة/عينة — ويظهر تنويه تحت حقل السعر — الفحص 82)
+                            paidNowPiasters > totalPiasters -> { errorText = "الدفعة الجزئية أكبر من الإجمالي"; shakeKey++ }
                             stockShort -> { errorText = "المخزون لا يكفي — المتوفر $available فقط"; shakeKey++ }
                             else -> {
                                 busy = true
                                 scope.launch {
-                                    viewModel.recordSale(selectedCustomer!!, units, pricePiasters, payNow, notes) { err ->
+                                    viewModel.recordSale(selectedCustomer!!, units, pricePiasters, paidNowPiasters, notes) { err ->
                                         busy = false
                                         if (err == null) showSuccess = true
                                         else { errorText = err; shakeKey++ }

@@ -5,38 +5,49 @@ import androidx.room.Insert
 import androidx.room.Query
 import com.dabb.business.model.PaymentEntity
 
+/**
+ * إصلاح الفحص 97: تحوّل الـ DAO من واجهة إلى صنف مجرد حتى يكون رفض
+ * التحصيل الصفري/السالب داخل طبقة البيانات نفسها (insertValidated)
+ * لا في المتصل فقط — أي مسار مستقبلي يمر من هنا محصَّن تلقائياً.
+ */
 @Dao
-interface PaymentDao {
+abstract class PaymentDao {
     @Insert
-    suspend fun insert(p: PaymentEntity)
+    abstract suspend fun insert(p: PaymentEntity)
 
-    // إصلاح الخطأ 10: ‏LIMIT 200 (الأحدث أولاً — فحص «التحصيلات اللاحقة» يبقى صحيحاً)
+    /** إدخال محصَّن (الفحص 97): يرفض أي دفعة تحصيل ≤ 0 على مستوى الـ DAO نفسه. */
+    suspend fun insertValidated(p: PaymentEntity) {
+        require(p.amount > 0L) { "مبلغ التحصيل يجب أن يكون أكبر من صفر" }
+        insert(p)
+    }
+
+    // إصلاح الخطأ 10: LIMIT 200 (الأحدث أولاً — فحص «التحصيلات اللاحقة» يبقى صحيحاً)
     @Query("SELECT * FROM payments WHERE customerId = :id ORDER BY paymentDate DESC LIMIT 200")
-    suspend fun getByCustomer(id: String): List<PaymentEntity>
+    abstract suspend fun getByCustomer(id: String): List<PaymentEntity>
 
     @Query("SELECT * FROM payments ORDER BY paymentDate DESC")
-    suspend fun getAll(): List<PaymentEntity>
+    abstract suspend fun getAll(): List<PaymentEntity>
 
     @Query("SELECT COALESCE(SUM(amount),0) FROM payments")
-    suspend fun getTotalCollections(): Long
+    abstract suspend fun getTotalCollections(): Long
 
     @Query("SELECT COALESCE(SUM(amount),0) FROM payments WHERE paymentDate >= :from")
-    suspend fun getCollectionsSince(from: Long): Long
+    abstract suspend fun getCollectionsSince(from: Long): Long
 
     @Query("SELECT COALESCE(SUM(amount),0) FROM payments WHERE customerId = :id")
-    suspend fun getCustomerCollections(id: String): Long
+    abstract suspend fun getCustomerCollections(id: String): Long
 
     @Query("SELECT * FROM payments WHERE id = :id")
-    suspend fun getById(id: String): PaymentEntity?
+    abstract suspend fun getById(id: String): PaymentEntity?
 
     /** عدّاد خفيف لفحص الوجود (بدل تحميل حتى 200 صف). */
     @Query("SELECT COUNT(*) FROM payments WHERE customerId = :id")
-    suspend fun countForCustomer(id: String): Int
+    abstract suspend fun countForCustomer(id: String): Int
 
     @Query("DELETE FROM payments WHERE id = :id")
-    suspend fun deleteById(id: String): Int
+    abstract suspend fun deleteById(id: String): Int
 
     /** إصلاح الخطأ 9: تحديث الاسم المكرر عند تعديل اسم الزبون. */
     @Query("UPDATE payments SET customerName = :name WHERE customerId = :id")
-    suspend fun updateCustomerName(id: String, name: String): Int
+    abstract suspend fun updateCustomerName(id: String, name: String): Int
 }

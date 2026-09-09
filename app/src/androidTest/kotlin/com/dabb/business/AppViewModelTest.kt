@@ -7,6 +7,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.dabb.business.data.local.AppDatabase
 import com.dabb.business.data.local.SettingsStore
 import com.dabb.business.model.CustomerEntity
+import com.dabb.business.model.PaymentEntity
 import com.dabb.business.ui.viewmodel.AppViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -70,7 +71,7 @@ class AppViewModelTest {
             createdAt = System.currentTimeMillis()
         )
         var saleError: String? = "لم تُستدع النتيجة"
-        vm.recordSale(tempCustomer, 2, 25_000L, payNow = false, notes = "") { saleError = it }.join()
+        vm.recordSale(tempCustomer, 2, 25_000L, paidNowPiasters = 0L, notes = "") { saleError = it }.join()
         assertEquals(null, saleError)
 
         val saved = db.customerDao().findByName("زبون اختبار")
@@ -129,7 +130,7 @@ class AppViewModelTest {
             createdAt = System.currentTimeMillis()
         )
         var err: String? = null
-        vm.recordSale(customer, 5, 25_000L, payNow = true, notes = "") { err = it }.join()
+        vm.recordSale(customer, 5, 25_000L, paidNowPiasters = 0L, notes = "") { err = it }.join()
         assertTrue("البيع فوق المخزون يجب أن يُرفض", err != null)
         assertEquals(1, db.cylinderDao().getAvailableCount())
     }
@@ -148,7 +149,7 @@ class AppViewModelTest {
             createdAt = System.currentTimeMillis()
         )
         var saleError: String? = "لم تُستدع النتيجة"
-        vm.recordSale(customer, 1, 25_000L, payNow = false, notes = "") { saleError = it }.join()
+        vm.recordSale(customer, 1, 25_000L, paidNowPiasters = 0L, notes = "") { saleError = it }.join()
         assertEquals("البيع يجب أن ينجح", null, saleError)
 
         var updateError: String? = "لم تُستدع النتيجة"
@@ -173,7 +174,7 @@ class AppViewModelTest {
         )
         var err: String? = null
         vm.recordSale(customer, 1, com.dabb.business.util.Money.MAX_AMOUNT + 1,
-            payNow = true, notes = "") { err = it }.join()
+            paidNowPiasters = 0L, notes = "") { err = it }.join()
         assertNotNull("سعر يتجاوز السقف يجب أن يُرفض", err)
         assertEquals(0, db.saleDao().getCount())
 
@@ -194,5 +195,85 @@ class AppViewModelTest {
         assertNotNull("سداد أكبر من دَين المحطة يجب أن يُرفض", err)
         assertEquals(20_000L, db.stationDao().getStationBalance())
         assertEquals(0, db.stationDao().getPayments().size)
+    }
+
+    /**
+     * إصلاح الفحص 4 (فحص 2026-09-09): دفع جزئي وقت البيع —
+     * سجل واحد بمبلغ مدفوع جزئي، والباقي دَين.
+     */
+    @Test
+    fun partial_payment_at_sale_time_records_remaining_debt() = runTest {
+        vm.purchaseFromStation(1, 10_000L, 0L, "").join()
+        val customer = CustomerEntity(
+            id = UUID.randomUUID().toString(), name = "زبون جزئي", phone = "",
+            createdAt = System.currentTimeMillis()
+        )
+        var err: String? = "لم تُستدع النتيجة"
+        vm.recordSale(customer, 1, 25_000L, paidNowPiasters = 10_000L, notes = "") { err = it }.join()
+        assertEquals("البيع بالدفع الجزئي يجب أن ينجح", null, err)
+        val saved = db.customerDao().findByName("زبون جزئي")
+        assertNotNull(saved)
+        val sale = db.saleDao().getByCustomer(saved!!.id).first()
+        assertEquals(10_000L, sale.amountPaid)
+        assertEquals(15_000L, db.saleDao().getCustomerBalance(saved.id))
+    }
+
+    /**
+     * إصلاح الفحص 7 (فحص 2026-09-09): السداد الزائد ينتج رصيداً
+     * دائناً (سالباً) لصالح الزبون — لا يُرفض.
+     */
+    @Test
+    fun overpayment_creates_credit_balance() = runTest {
+        vm.purchaseFromStation(1, 10_000L, 0L, "").join()
+        val customer = CustomerEntity(
+            id = UUID.randomUUID().toString(), name = "زبون دائن", phone = "",
+            createdAt = System.currentTimeMillis()
+        )
+        vm.recordSale(customer, 1, 25_000L, paidNowPiasters = 0L, notes = "") { }.join()
+        val saved = db.customerDao().findByName("زبون دائن")
+        assertNotNull(saved)
+        var err: String? = "لم تُستدع النتيجة"
+        vm.recordCustomerPayment(saved!!.id, 30_000L, "سداد زائد") { err = it }.join()
+        assertEquals("التحصيل الزائد يجب أن يُقبل", null, err)
+        assertEquals(-5_000L, db.saleDao().getCustomerBalance(saved.id))
+    }
+
+    /**
+     * إصلاح الفحص 82 (فحص 2026-09-09): بيع المنحة بسعر 0 —
+     * يُقبل بلا استثناء حسابي والرصيد لا يتأثر.
+     */
+    @Test
+    fun zero_price_gift_sale_is_accepted() = runTest {
+        vm.purchaseFromStation(1, 10_000L, 0L, "").join()
+        val customer = CustomerEntity(
+            id = UUID.randomUUID().toString(), name = "زبون منحة", phone = "",
+            createdAt = System.currentTimeMillis()
+        )
+        var err: String? = "لم تُستدع النتيجة"
+        vm.recordSale(customer, 1, 0L, paidNowPiasters = 0L, notes = "عينة") { err = it }.join()
+        assertEquals("بيع المنحة بسعر 0 يجب أن يُقبل", null, err)
+        val saved = db.customerDao().findByName("زبون منحة")
+        assertNotNull(saved)
+        val sale = db.saleDao().getByCustomer(saved!!.id).first()
+        assertEquals(0L, sale.totalAmount)
+        assertEquals(0L, db.saleDao().getCustomerBalance(saved.id))
+        assertEquals(0, db.cylinderDao().getAvailableCount())
+    }
+
+    /**
+     * إصلاح الفحص 97 (فحص 2026-09-09): طبقة الـ DAO نفسها
+     * (insertValidated) ترفض التحصيل الصفري/السالب.
+     */
+    @Test
+    fun dao_rejects_zero_payment() {
+        val result = runCatching {
+            db.paymentDao().insertValidated(
+                PaymentEntity(
+                    id = UUID.randomUUID().toString(), customerId = "x",
+                    customerName = "x", amount = 0L, paymentDate = 1L, notes = ""
+                )
+            )
+        }
+        assertTrue("التحصيل الصفري يجب أن يُرفض داخل PaymentDao", result.isFailure)
     }
 }

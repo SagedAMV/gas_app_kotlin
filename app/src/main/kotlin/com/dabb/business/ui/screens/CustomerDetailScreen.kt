@@ -181,7 +181,7 @@ fun CustomerDetailScreen(customerId: String, onBack: () -> Unit) {
 
     if (showPay && d != null) {
         PaymentDialog(
-            title = "تحصيل دفعة", maxPiasters = d.balance,
+            title = "تحصيل دفعة", maxPiasters = d.balance, allowExceedMax = true,
             onDismiss = { showPay = false },
             onConfirm = { amountPiasters, note ->
                 scope.launch {

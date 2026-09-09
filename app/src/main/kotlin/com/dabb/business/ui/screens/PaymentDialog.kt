@@ -19,6 +19,7 @@ import com.dabb.business.util.Money
 fun PaymentDialog(
     title: String,
     maxPiasters: Long,
+    allowExceedMax: Boolean = false,
     onDismiss: () -> Unit,
     onConfirm: (amountPiasters: Long, note: String) -> Unit
 ) {
@@ -34,6 +35,12 @@ fun PaymentDialog(
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("المتاح: ${Money.format(maxPiasters)} ريال",
                     style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                // إصلاح الفحص 7: تحصيل زائد مسموح للزبائن — الفارق رصيد دائن لصالحهم.
+                if (allowExceedMax) Text(
+                    "يمكن إدخال مبلغ أكبر — الفارق يُسجَّل رصيداً دائناً للزبون",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.tertiary
+                )
                 OutlinedTextField(
                     value = amountText,
                     onValueChange = { amountText = it.filter { ch -> ch.isDigit() || ch == '.' } },
@@ -56,7 +63,8 @@ fun PaymentDialog(
                 when {
                     amount <= 0L -> err = "أدخل مبلغاً أكبر من صفر"
                     // إصلاح الخطأ 6: الحد دقيق — لا يُسمح بأي مبلغ يتجاوز المتاح
-                    amount > maxPiasters -> err = "المبلغ أكبر من المتاح (${Money.format(maxPiasters)} ريال)"
+                    // (إلا إذا allowExceedMax — إصلاح الفحص 7: رصيد دائن للزبون)
+                    !allowExceedMax && amount > maxPiasters -> err = "المبلغ أكبر من المتاح (${Money.format(maxPiasters)} ريال)"
                     else -> onConfirm(amount, note)
                 }
             }) { Text("تأكيد", fontWeight = FontWeight.Bold) }

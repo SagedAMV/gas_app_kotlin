@@ -145,7 +145,8 @@ class AppViewModel internal constructor(
         stationBalance = stationDao.getStationBalance()
         // «الدين المتبقي» = الدَّين الحالي الكلي (بلا فلترة فترة):
         // كل ما بِيع − كل ما حُصِّل (عند البيع + التحصيلات اللاحقة).
-        // لا يمكن أن يكون سالباً: التحصيل فوق الرصيد مرفوض في المعاملة.
+        // بعد إصلاح الفحص 7 قد يمتلك زبونٌ رصيداً دائناً (سالباً) — يظهر في ملفه،
+        // وصافي هذا العداد يُعرض بحد أدنى 0.
         val allSales = saleDao.getTotalSales()
         val allPaid = saleDao.getSaleAmountPaid() + payDao.getTotalCollections()
         allTimeSales = allSales
@@ -244,16 +245,24 @@ class AppViewModel internal constructor(
     }
 
     // ===== البيع =====
-    fun recordSale(
-        customer: CustomerEntity, units: Int, pricePiasters: Long,
-        payNow: Boolean, notes: String, onResult: (String?) -> Unit = {}
-    ) = launch {
-        runOp(onResult) {
-            require(units > 0 && pricePiasters in 1..Money.MAX_AMOUNT) {
-                "أدخل عدداً وسعراً صحيحين (السعر الأقصى ${Money.format(Money.MAX_AMOUNT)} ريال)"
-            }
-            val available = cylDao.getAvailableCount()
-            if (available < units) error("المخزون لا يكفي — المتوفر $available أسطوانة فقط")
+fun recordSale(
+    customer: CustomerEntity, units: Int, pricePiasters: Long,
+    paidNowPiasters: Long, notes: String, onResult: (String?) -> Unit = {}
+) = launch {
+    runOp(onResult) {
+        // إصلاح الفحص 82: السعر 0 مسموح (منحة/عينة). السالب مرفوض دائماً —
+        // جوهر الفحص 15 («منع المبالغ السالبة») محفوظ كاملاً.
+        require(units > 0 && pricePiasters in 0..Money.MAX_AMOUNT) {
+            "أدخل عدداً صحيحاً وسعراً غير سالب (الحد الأقصى ${Money.format(Money.MAX_AMOUNT)} ريال)"
+        }
+        val totalAmountNow = units.toLong() * pricePiasters
+        // إصلاح الفحص 4: دفع جزئي وقت البيع — النطاق [0, الإجمالي]
+        // بنفس منطق سحب المحطة (purchaseFromStation).
+        require(paidNowPiasters in 0..totalAmountNow) {
+            "المدفوع الآن خارج النطاق (0 إلى ${Money.format(totalAmountNow)} ريال)"
+        }
+        val available = cylDao.getAvailableCount()
+        if (available < units) error("المخزون لا يكفي — المتوفر $available أسطوانة فقط")
 
             val existing = custDao.getById(customer.id) ?: custDao.findByName(customer.name.trim())
             val custId = existing?.id ?: customer.id
@@ -274,19 +283,23 @@ class AppViewModel internal constructor(
                 val updated = cylDao.markSoldByQuantity(units, now)
                 check(updated == units) { "تعذّر خصم المخزون — أعد المحاولة" }
 
-                val amount = units.toLong() * pricePiasters
-                val amountPaid = if (payNow) amount else 0L
+val amount = totalAmountNow
+// إصلاح الفحص 4: المبلغ المدفوع وقت البيع — كامل أو جزئي أو صفر.
+val amountPaid = paidNowPiasters
                 saleDao.insert(
                     SaleEntity(
                         id = UUID.randomUUID().toString(),
                         customerId = custId,
                         customerName = base.name.trim(),
-                        cylinderIdsJson = ids.joinToString(","),
+                        // إصلاح الفحص 33: تخزين JSON حقيقي ["id","id",...] — والقراءة
+// (parseCylinderIds) تدعم الصفوف القديمة بصيغة CSV بلا هجرة.
+cylinderIdsJson = ids.joinToString(",", "[", "]") { "\"$it\"" },
                         unitsSold = units,
                         pricePerUnit = pricePiasters,
                         totalAmount = amount,
                         amountPaid = amountPaid,
-                        status = if (payNow) SaleStatus.PAID else SaleStatus.CREDIT,
+                        // إصلاح الفحص 4: الدفع الجزئي يُسجَّل CREDIT (عليه متبقٍ) حتى يسدد كاملاً.
+status = if (amount - amountPaid <= 0L) SaleStatus.PAID else SaleStatus.CREDIT,
                         saleDate = now,
                         notes = notes.trim()
                     )
@@ -301,13 +314,12 @@ class AppViewModel internal constructor(
     fun recordCustomerPayment(customerId: String, amountPiasters: Long, notes: String,
                               onResult: (String?) -> Unit = {}) = launch {
         runOp(onResult) {
-            require(amountPiasters in 1..Money.MAX_AMOUNT) { "أدخل مبلغاً صحيحاً" }
-            val customer = custDao.getById(customerId) ?: error("الزبون غير موجود")
-            val balance = saleDao.getCustomerBalance(customerId)
-            if (balance <= 0) error("لا يوجد دَين على هذا الزبون")
-            if (amountPiasters > balance) error("المبلغ أكبر من الدين المتبقي")
-            db.withTransaction {
-                payDao.insert(
+require(amountPiasters in 1..Money.MAX_AMOUNT) { "أدخل مبلغاً صحيحاً" }
+val customer = custDao.getById(customerId) ?: error("الزبون غير موجود")
+// إصلاح الفحص 7: السداد الزائد مسموح — الفارق يتحول رصيداً دائناً (سالب)
+// لصالح الزبون عبر getCustomerBalance. (سداد المحطة فوق دَينها يبقى مرفوضاً.)
+db.withTransaction {
+payDao.insertValidated(
                     PaymentEntity(
                         id = UUID.randomUUID().toString(),
                         customerId = customerId,
@@ -346,7 +358,7 @@ class AppViewModel internal constructor(
                     .any { it.paymentDate > sale.saleDate }
                 if (laterPayment)
                     error("يوجد تحصيلات لاحقة على هذا البيع. ألغِ التحصيلات أولاً ثم ألغِ البيع.")
-                val ids = sale.cylinderIdsJson.split(",").filter { it.isNotBlank() }
+                val ids = parseCylinderIds(sale.cylinderIdsJson)
                 // إصلاح المشكلة 2: تُعاد فقط الأسطوانات ما زالت معلّمة بهذا البيع
                 // (مطابقة soldDate) — أسطوانة أُعيد بيعها لاحقاً لا تُمس.
                 // إصلاح الخطأ 2 (الجديد): التحقق من العدد المُعاد — إن نقص، تُلغى
@@ -566,6 +578,21 @@ class AppViewModel internal constructor(
     }
 
     // ===== أدوات داخلية =====
+
+    /**
+     * إصلاح الفحص 33: قراءة cylinderIdsJson بصيغة JSON الحقيقية،
+     * مع دعم الصفوف القديمة (CSV: "id,id") بلا هجرة — UUID لا يحتوي
+     * فواصل ولا علامات اقتباس فالتحليل آمن حرفياً.
+     */
+    private fun parseCylinderIds(stored: String): List<String> {
+        val t = stored.trim()
+        return if (t.startsWith("[")) {
+            t.removePrefix("[").removeSuffix("]")
+                .split(",").map { it.trim().trim('"') }.filter { it.isNotBlank() }
+        } else {
+            t.split(",").map { it.trim() }.filter { it.isNotBlank() }
+        }
+    }
 
     /**
      * طابع زمني فريد ومتزايد (حماية من تصادم ميلي ثانية):
