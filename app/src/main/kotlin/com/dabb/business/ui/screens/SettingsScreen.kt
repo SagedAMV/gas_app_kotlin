@@ -20,7 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import com.dabb.business.ui.components.sharedAppViewModel
 import com.dabb.business.data.local.SettingsStore
 import com.dabb.business.ui.animation.StaggeredReveal
 import com.dabb.business.ui.components.AppHeader
@@ -34,7 +34,7 @@ import java.util.Locale
 @Composable
 fun SettingsScreen() {
     val ctx = androidx.compose.ui.platform.LocalContext.current
-    val viewModel: AppViewModel = viewModel()
+    val viewModel: AppViewModel = sharedAppViewModel()
     val scope = rememberCoroutineScope()
     val store = remember { SettingsStore(ctx) }
 

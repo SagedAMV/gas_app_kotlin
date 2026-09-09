@@ -32,7 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import com.dabb.business.ui.components.sharedAppViewModel
 import com.dabb.business.model.SaleEntity
 import com.dabb.business.model.SaleStatus
 import com.dabb.business.ui.animation.AnimatedNumber
@@ -56,7 +56,7 @@ fun InventoryScreen(
     onNavigateToSales: () -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
-    val viewModel: AppViewModel = viewModel()
+    val viewModel: AppViewModel = sharedAppViewModel()
     val available = viewModel.availableCount
     val sold = viewModel.soldCount
     val totalUnits = available + sold

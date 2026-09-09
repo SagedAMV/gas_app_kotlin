@@ -48,7 +48,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.viewmodel.compose.viewModel
+import com.dabb.business.ui.components.sharedAppViewModel
 import com.dabb.business.ui.screens.PinGate
 import com.dabb.business.ui.screens.ReportsScreen
 import com.dabb.business.ui.screens.SalesHistoryScreen
@@ -185,7 +185,7 @@ fun AppNavigation() {
         ) { padding ->
             // إصلاح الفحص M1: قناة أخطاء الخلفية (errorMessage) كانت ميتة —
             // أي فشل غير متوقع (تحديث/خلفية) يظهر هنا ويُغلق تلقائياً بعد 5 ثوانٍ.
-            val errorViewModel: AppViewModel = viewModel()
+            val errorViewModel: AppViewModel = sharedAppViewModel()
             Box {
                 NavHost(
                     navController = navController,

@@ -18,7 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import com.dabb.business.ui.components.sharedAppViewModel
 import com.dabb.business.model.CustomerEntity
 import com.dabb.business.ui.animation.StaggeredReveal
 import com.dabb.business.ui.components.AppHeader
@@ -28,7 +28,7 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun CustomersScreen(onOpenCustomer: (String) -> Unit) {
-    val viewModel: AppViewModel = viewModel()
+    val viewModel: AppViewModel = sharedAppViewModel()
     val scope = rememberCoroutineScope()
     val customers = viewModel.allCustomers
     var showNew by remember { mutableStateOf(false) }
@@ -104,7 +104,7 @@ fun CustomersScreen(onOpenCustomer: (String) -> Unit) {
 
 @Composable
 private fun NewCustomerDialog(onDismiss: () -> Unit, onCreate: (String, String) -> Unit) {
-    val viewModel: AppViewModel = viewModel()
+    val viewModel: AppViewModel = sharedAppViewModel()
     var name by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
     var err by remember { mutableStateOf<String?>(null) }

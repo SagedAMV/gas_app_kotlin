@@ -15,7 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import com.dabb.business.ui.components.sharedAppViewModel
 import com.dabb.business.model.SaleEntity
 import com.dabb.business.model.SaleStatus
 import com.dabb.business.ui.animation.StaggeredReveal
@@ -35,7 +35,7 @@ import java.util.Locale
  */
 @Composable
 fun SalesHistoryScreen() {
-    val viewModel: AppViewModel = viewModel()
+    val viewModel: AppViewModel = sharedAppViewModel()
     val scope = rememberCoroutineScope()
     val pageSize = 100
 

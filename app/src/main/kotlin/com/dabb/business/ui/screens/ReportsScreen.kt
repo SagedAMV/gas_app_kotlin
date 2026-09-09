@@ -29,7 +29,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import com.dabb.business.ui.components.sharedAppViewModel
 import com.dabb.business.model.CustomerEntity
 import com.dabb.business.ui.animation.AnimatedMoney
 import com.dabb.business.ui.animation.BreathingIndicator
@@ -49,7 +49,7 @@ fun ReportsScreen(
     onOpenSettings: () -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
-    val viewModel: AppViewModel = viewModel()
+    val viewModel: AppViewModel = sharedAppViewModel()
     val available = viewModel.availableCount
     val sold = viewModel.soldCount
     val totalPaid = viewModel.totalPaid

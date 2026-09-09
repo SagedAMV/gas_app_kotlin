@@ -36,7 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import com.dabb.business.ui.components.sharedAppViewModel
 import com.dabb.business.model.CustomerEntity
 import com.dabb.business.ui.animation.AnimatedMoney
 import com.dabb.business.ui.animation.FullScreenSuccess
@@ -70,7 +70,7 @@ fun DispenseScreen() {
     var showSuccess by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
 
-    val viewModel: AppViewModel = viewModel()
+    val viewModel: AppViewModel = sharedAppViewModel()
     val scope = rememberCoroutineScope()
     val available = viewModel.availableCount
     val effPrice = priceText ?: Money.format(viewModel.defaultPricePiasters)

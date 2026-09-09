@@ -23,7 +23,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import com.dabb.business.ui.components.sharedAppViewModel
 import com.dabb.business.model.PaymentEntity
 import com.dabb.business.model.SaleEntity
 import com.dabb.business.model.SaleStatus
@@ -37,7 +37,7 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun CustomerDetailScreen(customerId: String, onBack: () -> Unit) {
-    val viewModel: AppViewModel = viewModel()
+    val viewModel: AppViewModel = sharedAppViewModel()
     val scope = rememberCoroutineScope()
     var detail by remember { mutableStateOf<CustomerDetail?>(null) }
     var showPay by remember { mutableStateOf(false) }

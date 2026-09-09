@@ -17,7 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import com.dabb.business.ui.components.sharedAppViewModel
 import com.dabb.business.model.StationPaymentEntity
 import com.dabb.business.model.StationPurchaseEntity
 import com.dabb.business.ui.animation.AnimatedMoney
@@ -30,7 +30,7 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun StationScreen() {
-    val viewModel: AppViewModel = viewModel()
+    val viewModel: AppViewModel = sharedAppViewModel()
     val scope = rememberCoroutineScope()
     var data by remember { mutableStateOf<StationData?>(null) }
     var showIntake by remember { mutableStateOf(false) }
