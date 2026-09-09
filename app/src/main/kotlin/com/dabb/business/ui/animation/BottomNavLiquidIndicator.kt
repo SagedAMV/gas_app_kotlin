@@ -27,6 +27,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -84,7 +85,7 @@ fun LiquidBottomBar(
                     .width(blobWidth)
                     .fillMaxHeight()
                     .padding(vertical = 12.dp)
-                    .graphicsLayer { scaleX = stretch }
+                    .graphicsLayer { scaleX = stretch.value }
                     .clip(RoundedCornerShape(50))
                     .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.75f))
             )

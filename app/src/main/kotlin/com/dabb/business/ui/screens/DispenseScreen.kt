@@ -32,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -100,11 +101,6 @@ fun DispenseScreen() {
             unitsPulse.snapTo(1f); unitsPulse.animateTo(1.14f, tween(55)); unitsPulse.animateTo(1f, tween(65))
         }
     }
-    // نبضة توسّع المجموع عند تغيّر الرقم فعلياً (§6.2.6)
-    LaunchedEffect(totalPiasters) {
-        totalPulse.snapTo(1f); totalPulse.animateTo(1.06f, tween(90)); totalPulse.animateTo(1f, tween(110))
-    }
-
     val viewModel: AppViewModel = sharedAppViewModel()
     val scope = rememberCoroutineScope()
     val available = viewModel.availableCount
@@ -113,6 +109,11 @@ fun DispenseScreen() {
     // آلاف ("25,000") وtoDoubleOrNull لا يفهمها — فكان البيع يفشل دائماً دون لمس الحقل.
     val pricePiasters = Money.poundsToPiasters(effPrice.replace(",", ""))
     val totalPiasters = units.toLong() * pricePiasters
+
+    // نبضة توسّع المجموع عند تغيّر الرقم فعلياً (§6.2.6) — نُقل بعد التعريف (خطأ ترجمة)
+    LaunchedEffect(totalPiasters) {
+        totalPulse.snapTo(1f); totalPulse.animateTo(1.06f, tween(90)); totalPulse.animateTo(1f, tween(110))
+    }
     // إصلاح الفحص 4: المدفوع الآن = كامل المبلغ (سدد الآن) أو الدفعة الجزئية أو 0.
     val paidNowPiasters = if (payNow) totalPiasters else Money.poundsToPiasters(partialText)
     val stockShort = units > available

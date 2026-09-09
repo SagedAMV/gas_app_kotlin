@@ -99,10 +99,12 @@ fun NavGraphBuilder.tabComposable(
 /** شاشة توغّل (تفاصيل/سجل/إعدادات) — انزلاق أعمق 380ms. */
 fun NavGraphBuilder.pushComposable(
     route: String,
+    arguments: List<androidx.navigation.NamedNavArgument> = emptyList(),
     content: @Composable (NavBackStackEntry) -> Unit
 ) {
     composable(
         route = route,
+        arguments = arguments,
         enterTransition = {
             slideInHorizontally(tween(dur(Motion.SCREEN_PUSH_IN), easing = Motion.EaseOutQuint)) { -it } +
                 fadeIn(tween(dur(Motion.SCREEN_PUSH_IN)))
@@ -130,5 +132,5 @@ fun NavGraphBuilder.animatedComposable(
     route: String,
     content: @Composable (NavBackStackEntry) -> Unit
 ) {
-    pushComposable(route, content)
+    pushComposable(route) { content(it) }
 }
