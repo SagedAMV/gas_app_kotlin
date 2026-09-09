@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -90,6 +91,8 @@ fun LiquidBottomBar(
                     .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.75f))
             )
 
+            // إصلاح: التبويبات في Row مع weight — كانت في Box فتكدّست فوق بعضها
+            Row(Modifier.fillMaxSize()) {
             tabs.forEachIndexed { i, tab ->
                 val selected = i == selectedIndex
                 val iconScale by animateFloatAsState(
@@ -105,7 +108,7 @@ fun LiquidBottomBar(
                 )
                 Box(
                     Modifier
-                        .width(tabWidth)
+                        .weight(1f)
                         .fillMaxHeight()
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
@@ -132,6 +135,7 @@ fun LiquidBottomBar(
                         )
                     }
                 }
+            }
             }
         }
     }
