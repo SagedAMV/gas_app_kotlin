@@ -176,6 +176,13 @@ class AppViewModel internal constructor(
     suspend fun getSalesBetween(from: Long, to: Long): List<SaleEntity> =
         saleDao.getBetween(from, to)
 
+    /**
+     * أول بيع اليوم؟ — قراءة فقط لكشف احتفالي وحيد (دليل الأنميشن §5.3:
+     * «أول بيع في اليوم» هو الاستثناء الوحيد للكونفيتي). لا يغيّر أي منطق مالي.
+     */
+    suspend fun isFirstSaleToday(): Boolean =
+        saleDao.getSince(ReportPeriod.DAY.startMillis()).isEmpty()
+
     fun refreshDebtors() = launch { topDebtors = custDao.getCustomersWithDebt().take(3) }
 
     fun refreshCustomers() = launch { allCustomers = custDao.getAll() }

@@ -18,7 +18,12 @@ import androidx.compose.ui.unit.dp
 import com.dabb.business.ui.components.sharedAppViewModel
 import com.dabb.business.model.SaleEntity
 import com.dabb.business.model.SaleStatus
+import com.dabb.business.ui.animation.ExpandableDetailCard
+import com.dabb.business.ui.animation.MiniSpinner
+import com.dabb.business.ui.animation.Motion
 import com.dabb.business.ui.animation.StaggeredReveal
+import com.dabb.business.ui.animation.StaggerSpeed
+import com.dabb.business.ui.animation.motionDuration
 import com.dabb.business.ui.components.AppHeader
 import com.dabb.business.ui.viewmodel.AppViewModel
 import com.dabb.business.util.Money

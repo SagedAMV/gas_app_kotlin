@@ -22,8 +22,31 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.dabb.business.ui.components.sharedAppViewModel
 import com.dabb.business.data.local.SettingsStore
+import com.dabb.business.ui.animation.MotionPreferences
+import com.dabb.business.ui.animation.Motion
+import com.dabb.business.ui.animation.MiniSpinner
+import com.dabb.business.ui.animation.PinPadField
 import com.dabb.business.ui.animation.StaggeredReveal
+import com.dabb.business.ui.animation.motionDuration
+import com.dabb.business.ui.animation.shakeEffect
 import com.dabb.business.ui.components.AppHeader
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.sp
+import com.dabb.business.ui.theme.DangerRed
+import com.dabb.business.ui.theme.SuccessGreen
 import com.dabb.business.ui.viewmodel.AppViewModel
 import com.dabb.business.util.Money
 import kotlinx.coroutines.launch
@@ -71,6 +94,7 @@ fun SettingsScreen() {
         }
     }
 
+    Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         AppHeader(title = "الإعدادات", subtitle = "الأسعار، الأمان، النسخ الاحتياطي",
             icon = Icons.Filled.PriceChange)
@@ -90,13 +114,29 @@ fun SettingsScreen() {
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()
                         )
+                        // §5.2: التحول السحري — زر الحفظ يتحول إلى ✓ مرة واحدة ثم يعود
                         Button(onClick = {
                             val p = Money.poundsToPiasters(priceText)
                             // إصلاح الفحص M1: السعر الفارغ/الصفر لم يعد يُبلع صامتاً
                             if (p > 0) { viewModel.setDefaultPrice(p); savedMsg = true; priceErr = null }
                             else priceErr = "أدخل سعراً أكبر من صفر"
                         }, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
-                            Text("حفظ السعر الافتراضي")
+                            AnimatedContent(
+                                targetState = savedMsg,
+                                transitionSpec = {
+                                    (fadeIn(tween(motionDuration(150))) + scaleIn(
+                                        initialScale = 0.7f,
+                                        animationSpec = Motion.overshootSpring()
+                                    )) togetherWith fadeOut(tween(motionDuration(150)))
+                                },
+                                label = "saveBtn"
+                            ) { saved ->
+                                if (saved) {
+                                    Icon(Icons.Filled.CheckCircle, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("تم الحفظ")
+                                } else Text("حفظ السعر الافتراضي")
+                            }
                         }
                         if (savedMsg) Text("تم الحفظ", style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.primary)
@@ -146,6 +186,32 @@ fun SettingsScreen() {
                 Card(shape = RoundedCornerShape(18.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("تقليل الحركة", style = MaterialTheme.typography.titleSmall)
+                        Text("يوقف الحركات المتكررة (الموجات، النبض، الكشف المتدرج المتواصل) ويجعل كل الانتقالات فورية. مناسب للأجهزة البطيئة ولمن يزعجهم التكرار.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Filled.PriceChange, null,
+                                tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(10.dp))
+                            Text("وضع تقليل الحركة", modifier = Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodyMedium)
+                            Switch(
+                                checked = MotionPreferences.reducedMotion,
+                                onCheckedChange = { on ->
+                                    MotionPreferences.reducedMotion = on
+                                    store.reducedMotion = on
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
+            StaggeredReveal(3) {
+                Card(shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text("النسخ الاحتياطي والاستعادة", style = MaterialTheme.typography.titleSmall)
                         Text("تُحفَظ بياناتك في ملف قاعدة بيانات على هاتفك. انسخه دورياً لأن فقدان الهاتف = فقدان كل الديون.",
                             style = MaterialTheme.typography.bodySmall,
@@ -167,14 +233,50 @@ fun SettingsScreen() {
                                 Text("استعادة")
                             }
                         }
-                        if (busyMsg != null) {
-                            Text(busyMsg!!, style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
-                        }
                     }
                 }
             }
             Spacer(Modifier.height(6.dp))
+        }
+    }
+    }
+
+    // §5.5: غطاء نسخ احتياطي — اسكرين أخضر يمنع اللمس أثناء العملية
+    busyMsg?.let { msg ->
+        val working = msg.startsWith("جارٍ")
+        val ok = msg.startsWith("تم")
+        // إخفاء تلقائي للرسائل النهائية كي لا يعلق الغطاء على الواجهة
+        LaunchedEffect(msg) {
+            if (!working) { kotlinx.coroutines.delay(1400); busyMsg = null }
+        }
+        val iconScale = remember { Animatable(0.3f) }
+        LaunchedEffect(ok) {
+            if (ok) iconScale.animateTo(1f, Motion.overshootSpring())
+        }
+        var errShake by remember { mutableIntStateOf(0) }
+        LaunchedEffect(msg) { if (!working && !ok) errShake++ }
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color(0xE6000000)),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                if (working) MiniSpinner(size = 44.dp, color = Color.White)
+                else if (ok) Icon(
+                    Icons.Filled.CheckCircle, null,
+                    tint = SuccessGreen,
+                    modifier = Modifier
+                        .size(56.dp)
+                        .graphicsLayer { scaleX = iconScale.value; scaleY = iconScale.value }
+                )
+                else Icon(
+                    Icons.Filled.Warning, null, tint = DangerRed,
+                    modifier = Modifier.size(56.dp).shakeEffect(errShake)
+                )
+                Text(msg, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            }
         }
     }
 
@@ -198,21 +300,11 @@ private fun PinCreateDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) 
         shape = RoundedCornerShape(20.dp),
         title = { Text("تعيين كود الدخول") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(
-                    value = pin,
-                    onValueChange = { v -> pin = v.filter { it.isDigit() }.take(4) },
-                    label = { Text("الكود (4 أرقام)") }, singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                    shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = pin2,
-                    onValueChange = { v -> pin2 = v.filter { it.isDigit() }.take(4) },
-                    label = { Text("تأكيد الكود") }, singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                    shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()
-                )
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("الكود الجديد", style = MaterialTheme.typography.labelMedium)
+                PinPadField(pin, { v -> pin = v })
+                Text("تأكيد الكود", style = MaterialTheme.typography.labelMedium)
+                PinPadField(pin2, { v -> pin2 = v })
                 if (err != null) Text(err!!, style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error)
             }

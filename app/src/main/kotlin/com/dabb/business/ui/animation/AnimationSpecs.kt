@@ -1,41 +1,40 @@
 package com.dabb.business.ui.animation
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.unit.IntOffset
 
 /**
- * مواصفات السرعة المتوازنة — لا سريع ولا بطيء
- * المهارة: ㉛ (إبداعي) + ⑨ (أداء — تقليل التعقيد غير الضروري)
+ * مواصفات قديمة — أُبقيت للتوافق فقط.
+ * @deprecated استخدم {@link Motion} + motionDuration() — دليل إعادة التصميم §8 خطوة 1.
  */
+@Deprecated("استخدم Motion + motionDuration()", ReplaceWith("Motion"))
 object AnimationSpecs {
-    // زر / تفاعل سريع برفق
-    val BUTTON_PRESS = tween<Float>(durationMillis = 180,
-        easing = androidx.compose.animation.core.FastOutSlowInEasing)
+    @Deprecated("استخدم Motion.MICRO/TAP", ReplaceWith("Motion"))
+    val BUTTON_PRESS = tween<Float>(durationMillis = Motion.TAP_HERO, easing = FastOutSlowInEasing)
 
-    // دخول / خروج الشاشة — متوازن ومريح
-    val SCREEN_ENTER = tween<Float>(durationMillis = 650,
-        easing = androidx.compose.animation.core.FastOutSlowInEasing)
-    val SCREEN_EXIT = tween<Float>(durationMillis = 350,
-        easing = androidx.compose.animation.core.FastOutSlowInEasing)
+    @Deprecated("استخدم Motion.SCREEN_PUSH_IN", ReplaceWith("Motion"))
+    val SCREEN_ENTER = tween<Float>(durationMillis = Motion.SCREEN_PUSH_IN, easing = FastOutSlowInEasing)
 
-    // إزاحة الانزلاق — IntOffset (الموضع) بنفس المدة
-    val SCREEN_ENTER_OFFSET = tween<IntOffset>(durationMillis = 650,
-        easing = androidx.compose.animation.core.FastOutSlowInEasing)
-    val SCREEN_EXIT_OFFSET = tween<IntOffset>(durationMillis = 350,
-        easing = androidx.compose.animation.core.FastOutSlowInEasing)
+    @Deprecated("استخدم Motion.SCREEN_PUSH_OUT", ReplaceWith("Motion"))
+    val SCREEN_EXIT = tween<Float>(durationMillis = Motion.SCREEN_PUSH_OUT, easing = FastOutSlowInEasing)
 
-    // تقليب البطاقة — بطيء قليلاً لإاحساس بالقوة
-    val FLIP = tween<Float>(durationMillis = 800,
-        easing = androidx.compose.animation.core.LinearOutSlowInEasing)
+    @Deprecated("استخدم Motion.SCREEN_PUSH_IN", ReplaceWith("Motion"))
+    val SCREEN_ENTER_OFFSET = tween<IntOffset>(durationMillis = Motion.SCREEN_PUSH_IN, easing = FastOutSlowInEasing)
 
-    // تكراري (نفس) — دورة هادئة
-    val REPEAT_PULSE = tween<Float>(durationMillis = 1200,
-        easing = androidx.compose.animation.core.FastOutSlowInEasing)
+    @Deprecated("استخدم Motion.SCREEN_PUSH_OUT", ReplaceWith("Motion"))
+    val SCREEN_EXIT_OFFSET = tween<IntOffset>(durationMillis = Motion.SCREEN_PUSH_OUT, easing = FastOutSlowInEasing)
 
-    // شاشة كاملة — تأثر عميق
-    val FULL_SCREEN = tween<Float>(durationMillis = 900,
-        easing = androidx.compose.animation.core.FastOutSlowInEasing)
+    @Deprecated("قيمة ثابتة — تُدار الآن من Motion", ReplaceWith("Motion"))
+    val FLIP = tween<Float>(durationMillis = 800, easing = LinearOutSlowInEasing)
 
-    // تأخير بسيط للظهور التدريجي
-    val STAGGER_DELAY = 120
+    @Deprecated("استخدم Motion.PULSE", ReplaceWith("Motion"))
+    val REPEAT_PULSE = tween<Float>(durationMillis = Motion.PULSE, easing = FastOutSlowInEasing)
+
+    @Deprecated("استخدم Motion.FULL_SCREEN_IN", ReplaceWith("Motion"))
+    val FULL_SCREEN = tween<Float>(durationMillis = Motion.FULL_SCREEN_IN, easing = FastOutSlowInEasing)
+
+    @Deprecated("استخدم Motion.STAGGER_NORMAL", ReplaceWith("Motion"))
+    const val STAGGER_DELAY = Motion.STAGGER_NORMAL
 }

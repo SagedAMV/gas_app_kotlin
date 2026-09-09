@@ -20,10 +20,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.dabb.business.ui.components.sharedAppViewModel
 import com.dabb.business.model.CustomerEntity
+import com.dabb.business.ui.animation.BreathingIndicator
+import com.dabb.business.ui.animation.SegmentedLiquidToggle
 import com.dabb.business.ui.animation.StaggeredReveal
 import com.dabb.business.ui.components.AppHeader
+import com.dabb.business.ui.theme.DangerRed
+import com.dabb.business.ui.theme.SlateText
 import com.dabb.business.ui.viewmodel.AppViewModel
 import com.dabb.business.util.Money
+import androidx.compose.ui.graphics.lerp
 import kotlinx.coroutines.launch
 
 @Composable
@@ -40,12 +45,23 @@ fun CustomersScreen(onOpenCustomer: (String) -> Unit) {
         customers.filter { it.balancePiasters() > 0L }
             .sortedByDescending { it.balancePiasters() }
     }
+    // §6.3: فلتر الكل/المدينون بمفتاح بلوب متحرك
+    var filter by remember { mutableStateOf(0) }
+    val maxDebt = debtors.firstOrNull()?.balancePiasters() ?: 0L
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         AppHeader(title = "الزبائن", subtitle = "الدين والتحصيل", icon = Icons.Filled.Person)
 
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             StaggeredReveal(0) {
+                SegmentedLiquidToggle(
+                    options = listOf("الكل", "المدينون"),
+                    selectedIndex = filter,
+                    onSelect = { filter = it },
+                    accent = MaterialTheme.colorScheme.primary
+                )
+            }
+            StaggeredReveal(1) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Filled.Schedule, null, tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier.size(18.dp))
@@ -57,18 +73,19 @@ fun CustomersScreen(onOpenCustomer: (String) -> Unit) {
                 }
             }
 
-            StaggeredReveal(1) {
+            StaggeredReveal(2) {
                 Card(shape = RoundedCornerShape(18.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     if (debtors.isEmpty()) EmptyHint("لا يوجد دَين على أي زبون الآن")
                     else debtors.forEachIndexed { i, c ->
-                        CustomerRow(c) { onOpenCustomer(c.id) }
+                        CustomerRow(c, maxDebt) { onOpenCustomer(c.id) }
                         if (i < debtors.lastIndex) DividerSoft()
                     }
                 }
             }
 
-            StaggeredReveal(2) {
+            if (filter == 0) {
+            StaggeredReveal(3) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("كل الزبائن (${customers.size})", style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.weight(1f))
@@ -78,15 +95,16 @@ fun CustomersScreen(onOpenCustomer: (String) -> Unit) {
                     }
                 }
             }
-            StaggeredReveal(3) {
+            StaggeredReveal(4) {
                 Card(shape = RoundedCornerShape(18.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     if (customers.isEmpty()) EmptyHint("لا يوجد زبائن بعد — أنشئ زبوناً أو سجّل أول بيع")
                     else customers.forEachIndexed { i, c ->
-                        CustomerRow(c) { onOpenCustomer(c.id) }
+                        CustomerRow(c, maxDebt) { onOpenCustomer(c.id) }
                         if (i < customers.lastIndex) DividerSoft()
                     }
                 }
+            }
             }
             Spacer(Modifier.height(6.dp))
         }
@@ -135,19 +153,27 @@ private fun NewCustomerDialog(onDismiss: () -> Unit, onCreate: (String, String) 
 }
 
 @Composable
-private fun CustomerRow(c: CustomerEntity, onClick: () -> Unit) {
+private fun CustomerRow(c: CustomerEntity, maxDebt: Long = 0L, onClick: () -> Unit) {
     val balance = c.balancePiasters()
     // إصلاح الفحص M6: > 0L — كان يُعرض زبون مدَّين بـ 1 ريال «مسدّد»
     val inDebt = balance > 0L
-    val accent = if (inDebt) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+    // §6.3: لون مبلغ الدَّين ديناميكي — يشتد نحو الأحمر كلما اقترب من أعلى دَين
+    val accent = if (inDebt) {
+        val t = if (maxDebt > 0L) (balance.toFloat() / maxDebt.toFloat()).coerceIn(0.15f, 1f) else 1f
+        lerp(SlateText, DangerRed, t)
+    } else MaterialTheme.colorScheme.primary
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(Modifier.size(38.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
-            contentAlignment = Alignment.Center) {
-            Text(c.name.trim().take(1), color = MaterialTheme.colorScheme.onPrimaryContainer,
-                fontWeight = FontWeight.ExtraBold)
+        // §6.3: نبض خافت خلف حرف الزبون المدين فقط — تمييز بصري فوري بلا قراءة رقم
+        Box(Modifier.size(38.dp), contentAlignment = Alignment.Center) {
+            if (inDebt) BreathingIndicator(size = 38.dp, color = DangerRed.copy(alpha = 0.35f))
+            Box(Modifier.size(33.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center) {
+                Text(c.name.trim().take(1), color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    fontWeight = FontWeight.ExtraBold)
+            }
         }
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {

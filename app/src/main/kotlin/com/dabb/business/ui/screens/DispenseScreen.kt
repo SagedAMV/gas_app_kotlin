@@ -39,9 +39,27 @@ import androidx.compose.ui.unit.sp
 import com.dabb.business.ui.components.sharedAppViewModel
 import com.dabb.business.model.CustomerEntity
 import com.dabb.business.ui.animation.AnimatedMoney
+import com.dabb.business.ui.animation.AnimatedProgressBar
 import com.dabb.business.ui.animation.FullScreenSuccess
+import com.dabb.business.ui.animation.IconPulseButton
+import com.dabb.business.ui.animation.MiniSpinner
+import com.dabb.business.ui.animation.Motion
+import com.dabb.business.ui.animation.SegmentedLiquidToggle
+import com.dabb.business.ui.animation.StaggerSpeed
 import com.dabb.business.ui.animation.StaggeredReveal
+import com.dabb.business.ui.animation.SuccessKind
+import com.dabb.business.ui.animation.errorFlash
+import com.dabb.business.ui.animation.motionDuration
+import com.dabb.business.ui.animation.safeFraction
 import com.dabb.business.ui.animation.shakeEffect
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.togetherWith
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import com.dabb.business.ui.components.AppHeader
 import com.dabb.business.ui.viewmodel.AppViewModel
 import com.dabb.business.util.Money
@@ -69,6 +87,23 @@ fun DispenseScreen() {
     var errorText by remember { mutableStateOf<String?>(null) }
     var showSuccess by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
+    // §6.2: نوع النجاح + نبضات العدّادات + حقل الخطأ الموضعي
+    var successKind by remember { mutableStateOf(SuccessKind.GENERIC) }
+    var successAmount by remember { mutableStateOf("") }
+    var errorField by remember { mutableStateOf(-1) }
+    val unitsPulse = remember { Animatable(1f) }
+    val totalPulse = remember { Animatable(1f) }
+    val haptic = LocalHapticFeedback.current
+    // نبضة العدّاد الميكانيكي عند كل تغيير كمية (§6.2.3)
+    LaunchedEffect(units) {
+        if (units > 1) {
+            unitsPulse.snapTo(1f); unitsPulse.animateTo(1.14f, tween(55)); unitsPulse.animateTo(1f, tween(65))
+        }
+    }
+    // نبضة توسّع المجموع عند تغيّر الرقم فعلياً (§6.2.6)
+    LaunchedEffect(totalPiasters) {
+        totalPulse.snapTo(1f); totalPulse.animateTo(1.06f, tween(90)); totalPulse.animateTo(1f, tween(110))
+    }
 
     val viewModel: AppViewModel = sharedAppViewModel()
     val scope = rememberCoroutineScope()
@@ -99,7 +134,7 @@ fun DispenseScreen() {
         }
     }
 
-    Column(Modifier.fillMaxSize().shakeEffect(shakeKey)) {
+    Column(Modifier.fillMaxSize()) {
         AppHeader(title = "صرف أسطوانة", subtitle = "تسجيل بيع جديد لزبون", icon = Icons.Filled.Person)
 
         Column(
@@ -130,15 +165,61 @@ fun DispenseScreen() {
                 label = { Text("بحث بالاسم أو التلفون") },
                 leadingIcon = { Icon(Icons.Filled.Search, null, modifier = Modifier.size(18.dp)) },
                 trailingIcon = { if (searching) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) },
-                singleLine = true, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()
+                singleLine = true, shape = RoundedCornerShape(14.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .shakeEffect(if (errorField == 0) shakeKey else 0)
+                    .errorFlash(if (errorField == 0) shakeKey else 0)
             )
+            // §6.2.2: بطاقة الزبون المختار تتمدد أعلى النموذج بدل الاستبدال الفوري
+            AnimatedVisibility(
+                visible = selectedCustomer != null,
+                enter = expandVertically(
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioNoBouncy,
+                        stiffness = Spring.StiffnessMediumLow
+                    )
+                ) + androidx.compose.animation.fadeIn(tween(motionDuration(220))),
+                exit = shrinkVertically(tween(motionDuration(180))) + fadeOut(tween(150))
+            ) {
+                selectedCustomer?.let { c ->
+                    Card(
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Avatar(c.name)
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(c.name, style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold)
+                                Text(if (c.phone.isNotBlank()) c.phone else "بدون تلفون",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Text(
+                                "دينه: ${Money.format(c.balancePiasters())} ريال",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = if (c.balancePiasters() > 0) MaterialTheme.colorScheme.error
+                                else MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
+            }
 
             if (results.isNotEmpty()) {
                 Card(shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Column(Modifier.padding(6.dp)) {
                         results.take(4).forEachIndexed { index, c ->
-                            StaggeredReveal(index) {
+                            StaggeredReveal(index, speed = StaggerSpeed.Fast) {
                                 Row(
                                     Modifier.fillMaxWidth()
                                         .clickable { selectedCustomer = c; customerQuery = c.name }
@@ -219,19 +300,33 @@ fun DispenseScreen() {
                     Text("عدد الأسطوانات", style = MaterialTheme.typography.labelMedium)
                     Spacer(Modifier.height(6.dp))
                     Row(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
+                        Modifier
+                            .fillMaxWidth()
+                            .shakeEffect(if (errorField == 3) shakeKey else 0)
+                            .errorFlash(if (errorField == 3) shakeKey else 0)
+                            .clip(RoundedCornerShape(14.dp))
                             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(onClick = { if (units > 1) units-- }) {
-                            Icon(Icons.Filled.Remove, "نقص", tint = MaterialTheme.colorScheme.primary)
-                        }
+                        IconPulseButton(
+                            icon = Icons.Filled.Remove, contentDescription = "نقص",
+                            onClick = { if (units > 1) units-- },
+                            tint = MaterialTheme.colorScheme.primary, iconSize = 20
+                        )
                         Text("$units", style = MaterialTheme.typography.titleLarge,
                             color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold,
-                            modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                        IconButton(onClick = { if (units < available) units++ }) {
-                            Icon(Icons.Filled.Add, "زيادة", tint = MaterialTheme.colorScheme.primary)
-                        }
+                            modifier = Modifier
+                                .weight(1f)
+                                .graphicsLayer {
+                                    scaleX = unitsPulse.value
+                                    scaleY = unitsPulse.value
+                                },
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        IconPulseButton(
+                            icon = Icons.Filled.Add, contentDescription = "زيادة",
+                            onClick = { if (units < available) units++ },
+                            tint = MaterialTheme.colorScheme.primary, iconSize = 20
+                        )
                     }
                     AnimatedVisibility(visible = stockShort) {
                         Text("⚠ المتوفر $available فقط", style = MaterialTheme.typography.labelSmall,
@@ -252,7 +347,8 @@ fun DispenseScreen() {
                         },
                         singleLine = true, suffix = { Text("ريال", style = MaterialTheme.typography.labelMedium) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.fillMaxWidth()
                     )
                     // إصلاح الفحص 82: سعر 0 = منحة/عينة — مسموح ومُعلن بوضوح قبل التأكيد.
                     if (pricePiasters == 0L) Text(
@@ -264,24 +360,55 @@ fun DispenseScreen() {
             }
 
             StepHeader("٣", "حالة السداد")
-            Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)).padding(4.dp)
+            // §6.2.4: مفتاح انزلاقي مزدوج بخلفية «بلوب» متحركة بدل تبديل اللون الفوري
+            SegmentedLiquidToggle(
+                options = listOf("سدد الآن", "بالأجل"),
+                selectedIndex = if (payNow) 0 else 1,
+                onSelect = { i ->
+                    payNow = i == 0
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                },
+                accent = if (payNow) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+            )
+            // إصلاح الفحص 4 + §6.2.5: حقل الدفعة الجزئية يتوسّع بنابض + شريط تقدم
+            // بلون يتدرّج من كهرماني إلى أخضر كلما اقترب من السداد الكامل
+            AnimatedVisibility(
+                visible = !payNow,
+                enter = expandVertically(
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioNoBouncy,
+                        stiffness = Spring.StiffnessMediumLow
+                    )
+                ) + androidx.compose.animation.fadeIn(tween(motionDuration(200))),
+                exit = shrinkVertically(tween(motionDuration(180))) + fadeOut(tween(150))
             ) {
-                SegOption("سدد الآن", payNow, MaterialTheme.colorScheme.primary, Icons.Filled.CheckCircle,
-                    { payNow = true }, Modifier.weight(1f))
-                SegOption("بالأجل", !payNow, MaterialTheme.colorScheme.error, Icons.Filled.Schedule,
-                    { payNow = false }, Modifier.weight(1f))
-            }
-            // إصلاح الفحص 4: حقل الدفعة الجزئية — يظهر فقط عند اختيار «بالأجل».
-            AnimatedVisibility(visible = !payNow) {
-                OutlinedTextField(
-                    value = partialText,
-                    onValueChange = { partialText = it.filter { ch -> ch.isDigit() || ch == '.' }.take(11) },
-                    label = { Text("دفعة جزئية الآن (اختياري)") }, singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()
-                )
+                Column {
+                    OutlinedTextField(
+                        value = partialText,
+                        onValueChange = { partialText = it.filter { ch -> ch.isDigit() || ch == '.' }.take(11) },
+                        label = { Text("دفعة جزئية الآن (اختياري)") }, singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .shakeEffect(if (errorField == 2) shakeKey else 0)
+                            .errorFlash(if (errorField == 2) shakeKey else 0)
+                    )
+                    if (totalPiasters > 0 && paidNowPiasters > 0) {
+                        Spacer(Modifier.height(6.dp))
+                        AnimatedProgressBar(
+                            progress = safeFraction(paidNowPiasters.toDouble(), totalPiasters.toDouble()),
+                            color = MaterialTheme.colorScheme.primary,
+                            dynamicColor = true,
+                            height = 5.dp
+                        )
+                        Text(
+                            "مدفوع الآن ${Money.format(paidNowPiasters)} من ${Money.format(totalPiasters)} ريال",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
 
             OutlinedTextField(value = notes, onValueChange = { notes = it },
@@ -307,9 +434,13 @@ fun DispenseScreen() {
                     Text("الإجمالي", style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Row(verticalAlignment = Alignment.Bottom) {
-                        AnimatedMoney(value = Money.piastersToPounds(totalPiasters),
-                            style = MaterialTheme.typography.headlineMedium,
-                            color = MaterialTheme.colorScheme.onSurface, durationMillis = 300)
+                        Box(Modifier.graphicsLayer {
+                            scaleX = totalPulse.value; scaleY = totalPulse.value
+                        }) {
+                            AnimatedMoney(value = Money.piastersToPounds(totalPiasters),
+                                style = MaterialTheme.typography.headlineMedium,
+                                color = MaterialTheme.colorScheme.onSurface, durationMillis = 300)
+                        }
                         Text(" ريال", style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(bottom = 4.dp))
@@ -320,18 +451,27 @@ fun DispenseScreen() {
                     onClick = {
                         errorText = null
                         when {
-                            selectedCustomer == null -> { errorText = "اختر الزبون أو أنشئه أولاً"; shakeKey++ }
-                            units <= 0 -> { errorText = "أدخل عدداً صحيحاً"; shakeKey++ }
+                            selectedCustomer == null -> { errorText = "اختر الزبون أو أنشئه أولاً"; shakeKey++; errorField = 0 }
+                            units <= 0 -> { errorText = "أدخل عدداً صحيحاً"; shakeKey++; errorField = 3 }
                             // (السعر 0 مسموح — منحة/عينة — ويظهر تنويه تحت حقل السعر — الفحص 82)
-                            paidNowPiasters > totalPiasters -> { errorText = "الدفعة الجزئية أكبر من الإجمالي"; shakeKey++ }
-                            stockShort -> { errorText = "المخزون لا يكفي — المتوفر $available فقط"; shakeKey++ }
+                            paidNowPiasters > totalPiasters -> { errorText = "الدفعة الجزئية أكبر من الإجمالي"; shakeKey++; errorField = 2 }
+                            stockShort -> { errorText = "المخزون لا يكفي — المتوفر $available فقط"; shakeKey++; errorField = 3 }
                             else -> {
                                 busy = true
                                 scope.launch {
+                                    // كشف تحفيزي وحيد: أول بيع في اليوم (§5.3)
+                                    val firstToday = viewModel.isFirstSaleToday()
                                     viewModel.recordSale(selectedCustomer!!, units, pricePiasters, paidNowPiasters, notes) { err ->
                                         busy = false
-                                        if (err == null) showSuccess = true
-                                        else { errorText = err; shakeKey++ }
+                                        if (err == null) {
+                                            successKind = when {
+                                                firstToday -> SuccessKind.FIRST_SALE_TODAY
+                                                payNow -> SuccessKind.SALE_CASH
+                                                else -> SuccessKind.SALE_CREDIT
+                                            }
+                                            successAmount = Money.format(totalPiasters)
+                                            showSuccess = true
+                                        } else { errorText = err; shakeKey++; errorField = -1 }
                                     }
                                 }
                             }
@@ -342,10 +482,21 @@ fun DispenseScreen() {
                         containerColor = if (payNow) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error),
                     contentPadding = PaddingValues(horizontal = 22.dp, vertical = 14.dp)
                 ) {
-                    if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Color.White)
-                    else {
-                        Icon(Icons.Filled.Check, null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp)); Text("تأكيد البيع", style = MaterialTheme.typography.labelLarge)
+                    AnimatedContent(
+                        targetState = busy,
+                        transitionSpec = {
+                            (fadeIn(tween(motionDuration(120))) + scaleIn(
+                                initialScale = 0.85f,
+                                animationSpec = tween(motionDuration(120))
+                            )) togetherWith fadeOut(tween(100))
+                        },
+                        label = "confirmBtn"
+                    ) { isLoading ->
+                        if (isLoading) MiniSpinner(size = 18.dp, color = Color.White)
+                        else {
+                            Icon(Icons.Filled.Check, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp)); Text("تأكيد البيع", style = MaterialTheme.typography.labelLarge)
+                        }
                     }
                 }
             }
@@ -353,7 +504,9 @@ fun DispenseScreen() {
     }
 
     FullScreenSuccess(visible = showSuccess, message = "تم تسجيل البيع",
-        subMessage = "تم خصم الأسطوانات من المخزون", onDismiss = { showSuccess = false })
+        subMessage = "تم خصم الأسطوانات من المخزون",
+        kind = successKind, amount = successAmount,
+        onDismiss = { showSuccess = false })
 }
 
 @Composable
@@ -374,21 +527,5 @@ private fun Avatar(name: String) {
         contentAlignment = Alignment.Center) {
         Text(name.trim().take(1), color = MaterialTheme.colorScheme.onPrimaryContainer,
             fontWeight = FontWeight.ExtraBold, fontSize = 13.sp)
-    }
-}
-
-@Composable
-private fun SegOption(label: String, selected: Boolean, accent: Color,
-                       icon: androidx.compose.ui.graphics.vector.ImageVector,
-                       onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val bg by animateColorAsState(if (selected) accent else Color.Transparent, tween(220), label = "bg")
-    val fg by animateColorAsState(
-        if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant, tween(220), label = "fg")
-    Row(modifier.clip(RoundedCornerShape(11.dp)).background(bg).clickable(onClick = onClick)
-            .padding(vertical = 10.dp),
-        horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, tint = fg, modifier = Modifier.size(15.dp))
-        Spacer(Modifier.width(6.dp))
-        Text(label, color = fg, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
     }
 }

@@ -28,7 +28,13 @@ import com.dabb.business.model.PaymentEntity
 import com.dabb.business.model.SaleEntity
 import com.dabb.business.model.SaleStatus
 import com.dabb.business.ui.animation.AnimatedMoney
+import com.dabb.business.ui.animation.FlippableCard
+import com.dabb.business.ui.animation.FlipButton
+import com.dabb.business.ui.animation.FullScreenSuccess
 import com.dabb.business.ui.animation.StaggeredReveal
+import com.dabb.business.ui.animation.SuccessKind
+import com.dabb.business.ui.animation.SwipeableActionRow
+import androidx.compose.runtime.saveable.rememberSaveable
 import com.dabb.business.ui.components.AppHeader
 import com.dabb.business.ui.viewmodel.AppViewModel
 import com.dabb.business.ui.viewmodel.CustomerDetail
@@ -48,6 +54,10 @@ fun CustomerDetailScreen(customerId: String, onBack: () -> Unit) {
     var refreshKey by remember { mutableIntStateOf(0) }
     // إصلاح الفحص M1: خطأ العملية لم يعد يضيع — كان يُتجاهل بـ { _ -> }
     var opError by remember { mutableStateOf<String?>(null) }
+    // §6.3: قلب بطاقة الرصيد + نجاح التحصيل المتخصص
+    var cardFlipped by rememberSaveable { mutableStateOf(false) }
+    var paySuccess by remember { mutableStateOf(false) }
+    var paySuccessAmount by remember { mutableStateOf("") }
 
     LaunchedEffect(customerId, refreshKey) {
         detail = viewModel.getCustomerDetail(customerId)
@@ -144,7 +154,13 @@ fun CustomerDetailScreen(customerId: String, onBack: () -> Unit) {
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     if (d.sales.isEmpty()) EmptyHint("لا توجد مبيعات")
                     else d.sales.forEachIndexed { i, sale ->
-                        SaleHistoryRow(sale) { confirmCancelSale = sale }
+                        SwipeableActionRow(
+                            actionLabel = "إلغاء",
+                            actionIcon = Icons.Filled.Delete,
+                            onAction = { confirmCancelSale = sale }
+                        ) {
+                            SaleHistoryRow(sale, showAction = false) { }
+                        }
                         if (i < d.sales.lastIndex) DividerSoft()
                     }
                 }
@@ -158,7 +174,13 @@ fun CustomerDetailScreen(customerId: String, onBack: () -> Unit) {
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     if (d.payments.isEmpty()) EmptyHint("لم يدفع أي دفعة بعد")
                     else d.payments.forEachIndexed { i, p ->
-                        PaymentRow(p) { confirmReversePayment = p }
+                        SwipeableActionRow(
+                            actionLabel = "عكس",
+                            actionIcon = Icons.Filled.Delete,
+                            onAction = { confirmReversePayment = p }
+                        ) {
+                            PaymentRow(p, showAction = false) { }
+                        }
                         if (i < d.payments.lastIndex) DividerSoft()
                     }
                 }
@@ -186,12 +208,26 @@ fun CustomerDetailScreen(customerId: String, onBack: () -> Unit) {
             onConfirm = { amountPiasters, note ->
                 scope.launch {
                     viewModel.recordCustomerPayment(customerId, amountPiasters, note) { e ->
-                        if (e == null) { showPay = false; refreshKey++ }
+                        if (e == null) {
+                            showPay = false; refreshKey++
+                            paySuccessAmount = Money.format(amountPiasters)
+                            paySuccess = true
+                        }
                     }
                 }
             }
         )
     }
+
+    // §5.3/§6.3: نجاح التحصيل المتخصص — الرصيد يتناقص عدّاً حياً بالتوازي
+    FullScreenSuccess(
+        visible = paySuccess,
+        message = "تم تحصيل الدفعة",
+        subMessage = "خُصمت من رصيد الزبون",
+        kind = SuccessKind.PAYMENT_COLLECTED,
+        amount = paySuccessAmount,
+        onDismiss = { paySuccess = false }
+    )
 
     if (editCustomer && d != null) {
         EditCustomerDialog(
@@ -287,7 +323,7 @@ private fun MiniStat(label: String, valuePiasters: Long, modifier: Modifier = Mo
 }
 
 @Composable
-private fun SaleHistoryRow(sale: SaleEntity, onCancel: () -> Unit) {
+private fun SaleHistoryRow(sale: SaleEntity, showAction: Boolean = true, onCancel: () -> Unit) {
     val paid = sale.status == SaleStatus.PAID
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically) {
@@ -301,7 +337,7 @@ private fun SaleHistoryRow(sale: SaleEntity, onCancel: () -> Unit) {
             Text("${if (paid) "سدد" else "بالأجل"} · ${timeAgoLocal(sale.saleDate)}",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        IconButton(onClick = onCancel) {
+        if (showAction) IconButton(onClick = onCancel) {
             Icon(Icons.Filled.Delete, "إلغاء البيع", tint = MaterialTheme.colorScheme.error,
                 modifier = Modifier.size(18.dp))
         }
@@ -309,7 +345,7 @@ private fun SaleHistoryRow(sale: SaleEntity, onCancel: () -> Unit) {
 }
 
 @Composable
-private fun PaymentRow(p: PaymentEntity, onReverse: () -> Unit) {
+private fun PaymentRow(p: PaymentEntity, showAction: Boolean = true, onReverse: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Filled.Payments, null, tint = MaterialTheme.colorScheme.primary,
@@ -322,7 +358,7 @@ private fun PaymentRow(p: PaymentEntity, onReverse: () -> Unit) {
         }
         Text("+${Money.format(p.amount)} ريال", style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.primary)
-        IconButton(onClick = onReverse) {
+        if (showAction) IconButton(onClick = onReverse) {
             Icon(Icons.Filled.Delete, "عكس الدفعة", tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
                 modifier = Modifier.size(16.dp))
         }

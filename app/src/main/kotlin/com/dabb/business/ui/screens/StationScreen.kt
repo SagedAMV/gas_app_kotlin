@@ -21,7 +21,17 @@ import com.dabb.business.ui.components.sharedAppViewModel
 import com.dabb.business.model.StationPaymentEntity
 import com.dabb.business.model.StationPurchaseEntity
 import com.dabb.business.ui.animation.AnimatedMoney
+import com.dabb.business.ui.animation.FullScreenSuccess
+import com.dabb.business.ui.animation.LiquidFillGauge
+import com.dabb.business.ui.animation.Motion
 import com.dabb.business.ui.animation.StaggeredReveal
+import com.dabb.business.ui.animation.SuccessKind
+import com.dabb.business.ui.animation.entryTilt
+import com.dabb.business.ui.animation.motionDuration
+import com.dabb.business.ui.animation.safeFraction
+import androidx.compose.ui.graphics.Color
+import com.dabb.business.ui.theme.DangerRed
+import com.dabb.business.ui.theme.WarmAmber
 import com.dabb.business.ui.components.AppHeader
 import com.dabb.business.ui.viewmodel.AppViewModel
 import com.dabb.business.ui.viewmodel.StationData
@@ -41,6 +51,10 @@ fun StationScreen() {
     var confirmCancelPayment by remember { mutableStateOf<StationPaymentEntity?>(null) }
     var opError by remember { mutableStateOf<String?>(null) }
     var intakeError by remember { mutableStateOf<String?>(null) }
+    // §5.3: نجاح متخصص — سحب من المحطة / تسديد لها
+    var successKind by remember { mutableStateOf(SuccessKind.GENERIC) }
+    var successAmount by remember { mutableStateOf("") }
+    var showSuccess by remember { mutableStateOf(false) }
 
     LaunchedEffect(refreshKey) { data = viewModel.getStationData() }
     val d = data
@@ -59,22 +73,35 @@ fun StationScreen() {
                         containerColor = if (balance > 0L) MaterialTheme.colorScheme.errorContainer
                         else MaterialTheme.colorScheme.primaryContainer)
                 ) {
-                    Column(Modifier.padding(18.dp)) {
-                        Text("دَين المحطة المتبقي", style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(Modifier.height(4.dp))
-                        Row {
-                            AnimatedMoney(Money.piastersToPounds(balance),
-                                style = MaterialTheme.typography.displaySmall,
-                                color = if (balance > 0L) MaterialTheme.colorScheme.error
-                                else MaterialTheme.colorScheme.primary)
-                            Text(" ريال", style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.padding(bottom = 8.dp))
+                    Row(Modifier.padding(18.dp)) {
+                        // §6.4: خزان يفرغ كلما سدّدت — كهرماني→أحمر مع ارتفاع الدَّين
+                        val totalPurchases = d?.totalPurchases ?: 0L
+                        LiquidFillGauge(
+                            fraction = safeFraction(balance.toDouble(), totalPurchases.toDouble()),
+                            reversed = true,
+                            colorLow = WarmAmber,
+                            colorHigh = DangerRed,
+                            bodyColor = Color.White,
+                            label = "الدَّين"
+                        )
+                        Spacer(Modifier.padding(6.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("دَين المحطة المتبقي", style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(Modifier.height(4.dp))
+                            Row {
+                                AnimatedMoney(Money.piastersToPounds(balance),
+                                    style = MaterialTheme.typography.headlineMedium,
+                                    color = if (balance > 0L) MaterialTheme.colorScheme.error
+                                    else MaterialTheme.colorScheme.primary)
+                                Text(" ريال", style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.padding(bottom = 4.dp))
+                            }
+                            Spacer(Modifier.height(6.dp))
+                            Text("إجمالي سحب: ${Money.format(totalPurchases)} ريال",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        Spacer(Modifier.height(6.dp))
-                        Text("إجمالي سحب: ${Money.format(d?.totalPurchases ?: 0L)} ريال",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -133,8 +160,12 @@ fun StationScreen() {
             onConfirm = { units, cost, paidNow ->
                 scope.launch {
                     viewModel.purchaseFromStation(units, cost, paidNow, "") { e ->
-                        if (e == null) { showIntake = false; refreshKey++ }
-                        else intakeError = e
+                        if (e == null) {
+                            showIntake = false; refreshKey++
+                            successKind = SuccessKind.STATION_INTAKE
+                            successAmount = Money.format(units.toLong() * cost)
+                            showSuccess = true
+                        } else intakeError = e
                     }
                 }
             }
@@ -147,12 +178,28 @@ fun StationScreen() {
             onConfirm = { amount, note ->
                 scope.launch {
                     viewModel.payStation(amount, note) { e ->
-                        if (e == null) { showPay = false; refreshKey++ }
+                        if (e == null) {
+                            showPay = false; refreshKey++
+                            successKind = SuccessKind.STATION_PAYMENT
+                            successAmount = Money.format(amount)
+                            showSuccess = true
+                        }
                     }
                 }
             }
         )
     }
+
+    // §5.3: نجاح متخصص حسب العملية
+    FullScreenSuccess(
+        visible = showSuccess,
+        message = if (successKind == SuccessKind.STATION_INTAKE) "تم سحب الأسطوانات" else "تم تسديد الدفعة",
+        subMessage = if (successKind == SuccessKind.STATION_INTAKE) "أُضيفت للمخزون وسُجّل الدَّين"
+        else "انخفض دَين المحطة",
+        kind = successKind,
+        amount = successAmount,
+        onDismiss = { showSuccess = false }
+    )
 
     opError?.let { msg ->
         // يُعرض داخل نافذة حوارية بسيطة — لا يفسد تخطيط الشاشة
@@ -215,8 +262,10 @@ fun StationScreen() {
 private fun PurchaseRow(p: StationPurchaseEntity, onCancel: () -> Unit = {}) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-        Icon(Icons.Filled.LocalShipping, null, tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(18.dp))
+        Box(Modifier.entryTilt()) {
+            Icon(Icons.Filled.LocalShipping, null, tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp))
+        }
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text("سحب ${p.units} أسطوانة", style = MaterialTheme.typography.bodyMedium,
@@ -241,8 +290,10 @@ private fun PurchaseRow(p: StationPurchaseEntity, onCancel: () -> Unit = {}) {
 private fun StationPaymentRow(p: StationPaymentEntity, onCancel: () -> Unit = {}) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-        Icon(Icons.Filled.Payments, null, tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(18.dp))
+        Box(Modifier.entryTilt()) {
+            Icon(Icons.Filled.Payments, null, tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp))
+        }
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text("سداد للمحطة", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)

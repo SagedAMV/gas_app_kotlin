@@ -63,7 +63,11 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.dabb.business.ui.animation.animatedComposable
+import com.dabb.business.ui.animation.ErrorSnackbarHost
+import com.dabb.business.ui.animation.LiquidBottomBar
+import com.dabb.business.ui.animation.LiquidTab
+import com.dabb.business.ui.animation.pushComposable
+import com.dabb.business.ui.animation.tabComposable
 import com.dabb.business.ui.screens.CustomerDetailScreen
 import com.dabb.business.ui.screens.CustomersScreen
 import com.dabb.business.ui.screens.DispenseScreen
@@ -129,14 +133,13 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private data class TabItem(val route: String, val label: String, val icon: ImageVector)
-
+// §7.6: تبويبات الشريط السفلي للمؤشر السائل
 private val tabs = listOf(
-    TabItem("inventory", "المخزون", Icons.Filled.Inventory2),
-    TabItem("dispense", "الصرف", Icons.Filled.PointOfSale),
-    TabItem("customers", "الزبائن", Icons.Filled.People),
-    TabItem("station", "المحطة", Icons.Filled.LocalShipping),
-    TabItem("reports", "التقارير", Icons.Filled.BarChart)
+    LiquidTab("inventory", "المخزون", Icons.Filled.Inventory2),
+    LiquidTab("dispense", "الصرف", Icons.Filled.PointOfSale),
+    LiquidTab("customers", "الزبائن", Icons.Filled.People),
+    LiquidTab("station", "المحطة", Icons.Filled.LocalShipping),
+    LiquidTab("reports", "التقارير", Icons.Filled.BarChart)
 )
 
 @Composable
@@ -151,35 +154,20 @@ fun AppNavigation() {
             containerColor = MaterialTheme.colorScheme.background,
             bottomBar = {
                 if (showBottomBar) {
-                    NavigationBar(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        tonalElevation = 0.dp
-                    ) {
-                        tabs.forEach { tab ->
-                            val selected = currentRoute == tab.route
-                            NavigationBarItem(
-                                selected = selected,
-                                onClick = {
-                                    navController.navigate(tab.route) {
-                                        popUpTo(navController.graph.findStartDestination().id) {
-                                            saveState = true
-                                        }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                },
-                                icon = { Icon(tab.icon, contentDescription = tab.label) },
-                                label = { Text(tab.label, style = MaterialTheme.typography.labelSmall) },
-                                colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    selectedTextColor = MaterialTheme.colorScheme.primary,
-                                    indicatorColor = MaterialTheme.colorScheme.primaryContainer,
-                                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            )
+                    // §7.6: مؤشر «بلوب» سائل ينزلق بين التبويبات بدل مؤشر Material الافتراضي
+                    LiquidBottomBar(
+                        tabs = tabs,
+                        currentRoute = currentRoute,
+                        onSelect = { route ->
+                            navController.navigate(route) {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    saveState = true
+                                }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
                         }
-                    }
+                    )
                 }
             }
         ) { padding ->
@@ -192,28 +180,28 @@ fun AppNavigation() {
                     startDestination = "inventory",
                     modifier = Modifier.padding(padding)
                 ) {
-                animatedComposable("inventory") {
+                tabComposable("inventory") {
                     InventoryScreen(
                         onNavigateToDispense = { navController.navigate("dispense") },
                         onNavigateToReports = { navController.navigate("reports") },
                         onNavigateToSales = { navController.navigate("sales_history") }
                     )
                 }
-                animatedComposable("dispense") { DispenseScreen() }
-                animatedComposable("customers") {
+                tabComposable("dispense") { DispenseScreen() }
+                tabComposable("customers") {
                     CustomersScreen(onOpenCustomer = { id -> navController.navigate("customer/$id") })
                 }
-                animatedComposable("station") { StationScreen() }
-                animatedComposable("reports") {
+                tabComposable("station") { StationScreen() }
+                tabComposable("reports") {
                     ReportsScreen(
                         onOpenCustomer = { id -> navController.navigate("customer/$id") },
                         onOpenCustomers = { navController.navigate("customers") },
                         onOpenSettings = { navController.navigate("settings") }
                     )
                 }
-                composable("settings") { SettingsScreen() }
-                composable("sales_history") { SalesHistoryScreen() }
-                composable(
+                pushComposable("settings") { SettingsScreen() }
+                pushComposable("sales_history") { SalesHistoryScreen() }
+                pushComposable(
                     route = "customer/{customerId}",
                     arguments = listOf(navArgument("customerId") { type = NavType.StringType })
                 ) { entry ->
@@ -221,42 +209,10 @@ fun AppNavigation() {
                     CustomerDetailScreen(customerId = id, onBack = { navController.popBackStack() })
                 }
                 }
-                GlobalErrorBanner(
+                ErrorSnackbarHost(
                     error = errorViewModel.errorMessage,
                     onDismiss = { errorViewModel.clearError() }
                 )
-            }
-        }
-    }
-}
-
-/** شريط خطأ عام للأخطاء غير المباشرة — يظهر أعلى الشاشة ويختفي بعد 5 ثوانٍ. */
-@Composable
-private fun GlobalErrorBanner(error: String?, onDismiss: () -> Unit) {
-    LaunchedEffect(error) {
-        if (error != null) {
-            delay(5000)
-            onDismiss()
-        }
-    }
-    AnimatedVisibility(
-        visible = error != null,
-        enter = fadeIn() + slideInVertically { it / 3 },
-        exit = fadeOut()
-    ) {
-        error?.let { msg ->
-            Row(
-                Modifier
-                    .statusBarsPadding()
-                    .fillMaxWidth()
-                    .padding(12.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.errorContainer),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(msg, color = MaterialTheme.colorScheme.onErrorContainer,
-                    style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                TextButton(onClick = onDismiss) { Text("إغلاق") }
             }
         }
     }

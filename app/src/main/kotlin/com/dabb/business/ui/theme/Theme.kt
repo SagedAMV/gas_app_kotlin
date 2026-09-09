@@ -13,6 +13,11 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.app.Application
+import android.content.Context
+import androidx.compose.ui.platform.LocalContext
+import com.dabb.business.data.local.SettingsStore
+import com.dabb.business.ui.animation.MotionPreferences
 
 /**
  * ثيم متكامل (Material 3) بهوية دبب البترول:
@@ -111,6 +116,12 @@ private val AppShapes = Shapes(
 
 @Composable
 fun AppTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
+    // الخطوة 28 (دليل إعادة التصميم): تهيئة تفضيل تقليل الحركة من الإعدادات —
+    // قراءة الحالة التفاعلية تضمن انعكاس تبديل المفتاح فوراً في كل الشاشات.
+    val ctx = LocalContext.current
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        MotionPreferences.reducedMotion = SettingsStore(ctx).reducedMotion
+    }
     val colors = if (darkTheme) DarkColors else LightColors
     MaterialTheme(
         colorScheme = colors,

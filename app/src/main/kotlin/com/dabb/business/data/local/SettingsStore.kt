@@ -19,6 +19,14 @@ class SettingsStore(context: Context) {
         get() = prefs.getLong(KEY_PRICE, 25000L) // افتراضي 25,000 ريال
         set(value) = prefs.edit().putLong(KEY_PRICE, value).apply()
 
+    /**
+     * تفضيل «تقليل الحركة» (دليل إعادة التصميم §8 خطوة 27):
+     * عند التفعيل تُختصر كل المدد إلى 0 وتتوقف الحلقات اللانهائية.
+     */
+    var reducedMotion: Boolean
+        get() = prefs.getBoolean(KEY_REDUCED_MOTION, false)
+        set(value) = prefs.edit().putBoolean(KEY_REDUCED_MOTION, value).apply()
+
     val isPinSet: Boolean get() = prefs.getString(KEY_PIN_HASH, null) != null
 
     fun setPin(pin: String) {
@@ -87,6 +95,7 @@ class SettingsStore(context: Context) {
         private const val KEY_PIN_HASH = "pin_hash"
         private const val KEY_PIN_FAILS = "pin_fails"
         private const val KEY_PIN_LAST_FAIL = "pin_last_fail"
+        private const val KEY_REDUCED_MOTION = "reduced_motion"
         private const val MAX_ATTEMPTS = 5
         private const val LOCK_MS = 60_000L
     }

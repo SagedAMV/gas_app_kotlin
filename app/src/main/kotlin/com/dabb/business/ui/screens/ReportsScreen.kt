@@ -33,7 +33,17 @@ import com.dabb.business.ui.components.sharedAppViewModel
 import com.dabb.business.model.CustomerEntity
 import com.dabb.business.ui.animation.AnimatedMoney
 import com.dabb.business.ui.animation.BreathingIndicator
+import com.dabb.business.ui.animation.DonutChartAnimated
+import com.dabb.business.ui.animation.MiniSpinner
+import com.dabb.business.ui.animation.Motion
+import com.dabb.business.ui.animation.SegmentedLiquidToggle
 import com.dabb.business.ui.animation.StaggeredReveal
+import com.dabb.business.ui.animation.motionDuration
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Brush
 import com.dabb.business.ui.components.AppHeader
 import com.dabb.business.ui.theme.SuccessGreen
 import com.dabb.business.ui.viewmodel.AppViewModel
@@ -65,6 +75,9 @@ fun ReportsScreen(
     val debtors = viewModel.topDebtors
     val period = viewModel.reportPeriod
     var refreshing by remember { mutableStateOf(false) }
+    // §6.5: شدة نبض الدَّين مرتبطة بحجمه النسبي — نبض «له معنى»
+    val creditPulseIntensity = if (allTimeSales > 0L)
+        (1f + (totalCredit.toFloat() / allTimeSales.toFloat())).coerceIn(0.8f, 2.2f) else 1f
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         AppHeader(
@@ -74,11 +87,22 @@ fun ReportsScreen(
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Filled.Settings, "الإعدادات", tint = Color.White, modifier = Modifier.size(19.dp))
                     }
+                    // §6.5: زر التحديث — الأيقونة تدور 360° كاملة ثم تصفّر غير مرئي
+                    val refreshSpin = remember { Animatable(0f) }
+                    LaunchedEffect(refreshing) {
+                        if (refreshing) {
+                            refreshSpin.snapTo(0f)
+                            refreshSpin.animateTo(360f, tween(motionDuration(700), easing = Motion.EaseOutCubic))
+                        }
+                    }
                     TextButton(onClick = {
                         scope.launch { refreshing = true; viewModel.refreshAll(); delay(500); refreshing = false }
                     }) {
-                        if (refreshing) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Color.White)
-                        else Icon(Icons.Filled.Refresh, "تحديث", tint = Color.White, modifier = Modifier.size(18.dp))
+                        if (refreshing) MiniSpinner(size = 18.dp, color = Color.White)
+                        else Icon(Icons.Filled.Refresh, "تحديث", tint = Color.White,
+                            modifier = Modifier
+                                .size(18.dp)
+                                .graphicsLayer { rotationZ = refreshSpin.value })
                     }
                 }
             }
@@ -86,17 +110,15 @@ fun ReportsScreen(
 
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
 
-            // فلترة الفترة الزمنية
+            // فلترة الفترة الزمنية — §6.5: مفتاح بلوب متحرك
             StaggeredReveal(0) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ReportPeriod.entries.forEach { p ->
-                        FilterChip(
-                            selected = period == p,
-                            onClick = { viewModel.setPeriod(p) },
-                            label = { Text(p.label) }
-                        )
-                    }
-                }
+                val periods = ReportPeriod.entries.toList()
+                SegmentedLiquidToggle(
+                    options = periods.map { it.label },
+                    selectedIndex = periods.indexOf(period).coerceAtLeast(0),
+                    onSelect = { i -> viewModel.setPeriod(periods[i]) },
+                    accent = MaterialTheme.colorScheme.primary
+                )
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -109,7 +131,8 @@ fun ReportsScreen(
                 StatTile(Icons.Filled.Payments, MaterialTheme.colorScheme.tertiary,
                     { MoneyTile(totalPaid) }, "المحصّل (${period.label})", Modifier.weight(1f))
                 StatTile(Icons.Filled.Schedule, MaterialTheme.colorScheme.error,
-                    { MoneyTile(totalCredit) }, "الدين المتبقّي (كامل)", Modifier.weight(1f), pulse = true)
+                    { MoneyTile(totalCredit) }, "الدين المتبقّي (كامل)", Modifier.weight(1f),
+                    pulse = true, pulseIntensity = creditPulseIntensity)
             }
 
             // الربح ودَين المحطة
@@ -120,10 +143,27 @@ fun ReportsScreen(
                         MoneyLine("إجمالي المبيعات", totalSales)
                         MoneyLine("تكلفة الأسطوانات المباعة", totalCost)
                         HorizontalDivider()
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        // §6.5: شريط الربح يتحول بالكامل (لا الرقم فقط) عند الخسارة
+                        val profitColor by animateColorAsState(
+                            targetValue = if (profit < 0L) MaterialTheme.colorScheme.error else SuccessGreen,
+                            animationSpec = tween(motionDuration(400)), label = "profitColor"
+                        )
+                        val profitBg by animateColorAsState(
+                            targetValue = if (profit < 0L) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f)
+                            else androidx.compose.ui.graphics.Color.Transparent,
+                            animationSpec = tween(motionDuration(400)), label = "profitBg"
+                        )
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(profitBg)
+                                .padding(horizontal = 6.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Text("الربح التقديري", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
                             AnimatedMoney(Money.piastersToPounds(profit),
-                                style = MaterialTheme.typography.titleMedium, color = SuccessGreen)
+                                style = MaterialTheme.typography.titleMedium, color = profitColor)
                             Text(" ريال", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 4.dp))
                         }
                         // إصلاح الفحص M6: > 0L — دَين 1 ريال يُعرض (كان يُخفى)
@@ -137,7 +177,7 @@ fun ReportsScreen(
                 Card(shape = RoundedCornerShape(18.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        DonutChart(
+                        DonutChartAnimated(
                             paid = Money.piastersToPounds(allTimePaid),
                             credit = Money.piastersToPounds(totalCredit),
                             modifier = Modifier.size(104.dp)
@@ -213,7 +253,8 @@ private fun MoneyLine(label: String, piasters: Long, color: Color = MaterialThem
 
 @Composable
 private fun StatTile(icon: ImageVector, tint: Color, value: @Composable () -> Unit,
-                     label: String, modifier: Modifier = Modifier, pulse: Boolean = false) {
+                     label: String, modifier: Modifier = Modifier, pulse: Boolean = false,
+                     pulseIntensity: Float = 1f) {
     Card(modifier, shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(Modifier.padding(12.dp)) {
@@ -224,38 +265,9 @@ private fun StatTile(icon: ImageVector, tint: Color, value: @Composable () -> Un
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 value()
-                if (pulse) { Spacer(Modifier.width(5.dp)); BreathingIndicator(size = 7.dp, color = tint) }
+                if (pulse) { Spacer(Modifier.width(5.dp)); BreathingIndicator(size = 7.dp, color = tint, intensity = pulseIntensity) }
             }
             Text(label, style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
-
-@Composable
-private fun DonutChart(paid: Double, credit: Double, modifier: Modifier = Modifier) {
-    val total = paid + credit
-    val paidFraction = if (total <= 0.0) 0f else (paid / total).toFloat().coerceIn(0f, 1f)
-    val trackColor = MaterialTheme.colorScheme.error.copy(alpha = 0.18f)
-    val paidColor = MaterialTheme.colorScheme.primary
-    Box(modifier, contentAlignment = Alignment.Center) {
-        Canvas(Modifier.fillMaxSize()) {
-            val stroke = 11.dp.toPx()
-            val inset = stroke / 2
-            val arcSize = androidx.compose.ui.geometry.Size(size.width - stroke, size.height - stroke)
-            drawArc(color = trackColor, startAngle = -90f, sweepAngle = 360f, useCenter = false,
-                topLeft = Offset(inset, inset), size = arcSize,
-                style = Stroke(width = stroke, cap = StrokeCap.Round))
-            if (paidFraction > 0f) {
-                drawArc(color = paidColor, startAngle = -90f, sweepAngle = 360f * paidFraction,
-                    useCenter = false, topLeft = Offset(inset, inset), size = arcSize,
-                    style = Stroke(width = stroke, cap = StrokeCap.Round))
-            }
-        }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("${(paidFraction * 100).toInt()}٪", style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface)
-            Text("محصَّل", style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
