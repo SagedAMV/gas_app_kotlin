@@ -114,11 +114,20 @@ fun CustomerDetailScreen(customerId: String, onBack: () -> Unit) {
                         else MaterialTheme.colorScheme.primaryContainer)
                 ) {
                     Column(Modifier.padding(18.dp)) {
-                        Text("الرصيد المتبقي", style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        // العيب 12: الرصيد الدائن يُسمّى صراحة بدل رقم سالب غامض
+                        Text(
+                            when {
+                                d.balance < 0L -> "رصيد دائن لصالح الزبون"
+                                d.balance > 0L -> "الرصيد المتبقي"
+                                else -> "مسدَّد بالكامل"
+                            },
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                         Spacer(Modifier.height(4.dp))
                         Row(verticalAlignment = Alignment.Bottom) {
-                            AnimatedMoney(Money.piastersToPounds(d.balance),
+                            // القيمة المطلقة — التسمية أعلاه تشرح الاتجاه
+                            AnimatedMoney(Money.piastersToPounds(kotlin.math.abs(d.balance)),
                                 style = MaterialTheme.typography.displaySmall,
                                 color = if (d.balance > 0L) MaterialTheme.colorScheme.error
                                 else MaterialTheme.colorScheme.primary)
@@ -135,14 +144,19 @@ fun CustomerDetailScreen(customerId: String, onBack: () -> Unit) {
             }
 
             StaggeredReveal(1) {
+                // العيب 12: لا تُربط إتاحة التحصيل بإشارة الرصيد — ميزة «الرصيد
+                // الدائن» (README الفحص 7) كانت معطلة تماماً عند رصيد 0/سالب
                 Button(
-                    onClick = { showPay = true }, enabled = d.balance > 0L,
+                    onClick = { showPay = true }, enabled = d.customer != null,
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier.fillMaxWidth().height(50.dp)
                 ) {
                     Icon(Icons.Filled.Payments, null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("تحصيل دفعة من الزبون", style = MaterialTheme.typography.labelLarge)
+                    Text(
+                        if (d.balance > 0L) "تحصيل دفعة من الزبون" else "تسجيل دفعة (رصيد دائن)",
+                        style = MaterialTheme.typography.labelLarge
+                    )
                 }
             }
 
@@ -203,7 +217,7 @@ fun CustomerDetailScreen(customerId: String, onBack: () -> Unit) {
 
     if (showPay && d != null) {
         PaymentDialog(
-            title = "تحصيل دفعة", maxPiasters = d.balance, allowExceedMax = true,
+            title = "تحصيل دفعة", maxPiasters = d.balance.coerceAtLeast(0L), allowExceedMax = true,
             onDismiss = { showPay = false },
             onConfirm = { amountPiasters, note ->
                 scope.launch {
@@ -251,7 +265,7 @@ fun CustomerDetailScreen(customerId: String, onBack: () -> Unit) {
             onDismissRequest = { confirmCancelSale = null },
             shape = RoundedCornerShape(20.dp),
             title = { Text("إلغاء هذا البيع؟") },
-            text = { Text("ستُرجَع ${sale.unitsSold} أسطوانة إلى المخزون وتُخصم قيمة البيع (${Money.format(sale.totalAmount)} ج) من دين/مدفوعات الزبون.") },
+            text = { Text("ستُرجَع ${sale.unitsSold} أسطوانة إلى المخزون وتُخصم قيمة البيع (${Money.format(sale.totalAmount)} ريال) من دين/مدفوعات الزبون.") },
                 confirmButton = {
                     TextButton(onClick = {
                         scope.launch {
