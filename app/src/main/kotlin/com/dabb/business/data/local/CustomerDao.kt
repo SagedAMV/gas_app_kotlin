@@ -22,7 +22,9 @@ interface CustomerDao {
     @Query("SELECT * FROM customers WHERE id = :id")
     suspend fun getById(id: String): CustomerEntity?
 
-    @Query("SELECT * FROM customers ORDER BY name COLLATE NOCASE ASC")
+    // العيب 6ب: سقف 2000 — الزبائن وحدهم كانوا بلا LIMIT بينما البحث 50
+    // والمدينون 200 والمبيعات مرقّمة. حجم محلي واقعي لا يقاربه المستخدم.
+    @Query("SELECT * FROM customers ORDER BY name COLLATE NOCASE ASC LIMIT 2000")
     suspend fun getAll(): List<CustomerEntity>
 
     @Query("SELECT * FROM customers WHERE name = :name COLLATE NOCASE LIMIT 1")

@@ -55,6 +55,8 @@ fun StationScreen() {
     var successKind by remember { mutableStateOf(SuccessKind.GENERIC) }
     var successAmount by remember { mutableStateOf("") }
     var showSuccess by remember { mutableStateOf(false) }
+    // العيب 22: نبضة زمن موحدة لكل صفوف «منذ X» في الشاشة
+    val nowTick = rememberNowTick()
 
     LaunchedEffect(refreshKey) { data = viewModel.getStationData() }
     val d = data
@@ -130,7 +132,7 @@ fun StationScreen() {
                     val purchases = d?.purchases ?: emptyList()
                     if (purchases.isEmpty()) EmptyHint("لا يوجد سحب من المحطة بعد")
                     else purchases.take(30).forEachIndexed { i, p ->
-                        PurchaseRow(p, onCancel = { confirmCancelPurchase = p })
+                        PurchaseRow(p, now = nowTick, onCancel = { confirmCancelPurchase = p })
                         if (i < purchases.lastIndex && i < 29) DividerSoft()
                     }
                 }
@@ -143,7 +145,7 @@ fun StationScreen() {
                     val payments = d?.payments ?: emptyList()
                     if (payments.isEmpty()) EmptyHint("لم تُسدّد أي دفعة للمحطة بعد")
                     else payments.take(30).forEachIndexed { i, p ->
-                        StationPaymentRow(p, onCancel = { confirmCancelPayment = p })
+                        StationPaymentRow(p, now = nowTick, onCancel = { confirmCancelPayment = p })
                         if (i < payments.lastIndex && i < 29) DividerSoft()
                     }
                 }
@@ -259,7 +261,7 @@ fun StationScreen() {
 }
 
 @Composable
-private fun PurchaseRow(p: StationPurchaseEntity, onCancel: () -> Unit = {}) {
+private fun PurchaseRow(p: StationPurchaseEntity, now: Long = System.currentTimeMillis(), onCancel: () -> Unit = {}) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
         Box(Modifier.entryTilt()) {
@@ -270,7 +272,7 @@ private fun PurchaseRow(p: StationPurchaseEntity, onCancel: () -> Unit = {}) {
         Column(Modifier.weight(1f)) {
             Text("سحب ${p.units} أسطوانة", style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold)
-            Text("${timeAgoLocal(p.purchaseDate)} · دُفع ${Money.format(p.amountPaid)} ريال",
+            Text("${timeAgoLocal(p.purchaseDate, now)} · دُفع ${Money.format(p.amountPaid)} ريال",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
@@ -287,7 +289,7 @@ private fun PurchaseRow(p: StationPurchaseEntity, onCancel: () -> Unit = {}) {
 }
 
 @Composable
-private fun StationPaymentRow(p: StationPaymentEntity, onCancel: () -> Unit = {}) {
+private fun StationPaymentRow(p: StationPaymentEntity, now: Long = System.currentTimeMillis(), onCancel: () -> Unit = {}) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
         Box(Modifier.entryTilt()) {
@@ -297,7 +299,7 @@ private fun StationPaymentRow(p: StationPaymentEntity, onCancel: () -> Unit = {}
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text("سداد للمحطة", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-            Text(timeAgoLocal(p.paymentDate), style = MaterialTheme.typography.bodySmall,
+            Text(timeAgoLocal(p.paymentDate, now), style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Text("−${Money.format(p.amount)} ريال", style = MaterialTheme.typography.titleSmall,

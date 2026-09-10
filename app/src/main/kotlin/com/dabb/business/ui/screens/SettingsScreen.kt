@@ -193,6 +193,11 @@ fun SettingsScreen() {
                         Text("يوقف الحركات المتكررة (الموجات، النبض، الكشف المتدرج المتواصل) ويجعل كل الانتقالات فورية. مناسب للأجهزة البطيئة ولمن يزعجهم التكرار.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        // العيب 6ج: إعداد النظام «إزالة الحركة» يُحترم ويَسِبق مفتاح التطبيق
+                        val systemReduced = android.provider.Settings.Global.getFloat(
+                            ctx.contentResolver,
+                            android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f
+                        ) == 0f
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Filled.PriceChange, null,
                                 tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
@@ -201,12 +206,18 @@ fun SettingsScreen() {
                                 style = MaterialTheme.typography.bodyMedium)
                             Switch(
                                 checked = MotionPreferences.reducedMotion,
+                                enabled = !systemReduced,
                                 onCheckedChange = { on ->
                                     MotionPreferences.reducedMotion = on
                                     store.reducedMotion = on
                                 }
                             )
                         }
+                        if (systemReduced) Text(
+                            "مفعَّل حالياً من إعدادات النظام (إزالة الحركة) — يسبق مفتاح التطبيق",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }

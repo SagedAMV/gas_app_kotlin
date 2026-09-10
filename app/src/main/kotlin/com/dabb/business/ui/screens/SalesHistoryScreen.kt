@@ -114,7 +114,7 @@ fun SalesHistoryScreen() {
                                 Column(Modifier.weight(1f)) {
                                     Text("بيع لـ «${sale.customerName}»",
                                         style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
-                                    Text("${sale.unitsSold} أسطوانة · ${if (sale.status == SaleStatus.PAID) "سدد" else "بالأجل"} · ${timeAgoLocal(sale.saleDate)}",
+                                    Text("${sale.unitsSold} أسطوانة · ${if (sale.status == SaleStatus.PAID) "سدد" else "بالأجل"} · ${timeAgoLocal(sale.saleDate, nowTick)}",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }

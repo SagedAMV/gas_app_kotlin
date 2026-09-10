@@ -252,20 +252,23 @@ fun PinGate(onUnlocked: () -> Unit) {
 /** موجات السائل — طبقتان بطورين وسرعتين مختلفتين (إحساس عمق الخزان). */
 @Composable
 private fun LiquidWaves() {
-    val loops = motionLoopsAllowed()
-    val t = rememberInfiniteTransition(label = "pinWaves")
-    val p1 by t.animateFloat(
-        initialValue = 0f, targetValue = (2f * PI).toFloat(),
-        animationSpec = infiniteRepeatable(tween(Motion.LIQUID, easing = LinearEasing)),
-        label = "w1"
-    )
-    val p2 by t.animateFloat(
-        initialValue = 0f, targetValue = (2f * PI).toFloat(),
-        animationSpec = infiniteRepeatable(tween((Motion.LIQUID * 0.62f).toInt(), easing = LinearEasing)),
-        label = "w2"
-    )
+    // العيب 17: الحلقة تُنشأ داخل الفرع — كانت تُنشأ دائماً وتعمل 60
+    // إطاراً/ثانية حتى مع «تقليل الحركة» (تجميد القيمة لا يوقف الحلقة)
+    val waves: List<Pair<Float, Float>> = if (motionLoopsAllowed()) {
+        val t = rememberInfiniteTransition(label = "pinWaves")
+        val p1 by t.animateFloat(
+            initialValue = 0f, targetValue = (2f * PI).toFloat(),
+            animationSpec = infiniteRepeatable(tween(Motion.LIQUID, easing = LinearEasing)),
+            label = "w1"
+        )
+        val p2 by t.animateFloat(
+            initialValue = 0f, targetValue = (2f * PI).toFloat(),
+            animationSpec = infiniteRepeatable(tween((Motion.LIQUID * 0.62f).toInt(), easing = LinearEasing)),
+            label = "w2"
+        )
+        listOf(p1 to 0.05f, p2 to 0.08f)
+    } else listOf(0.6f to 0.05f, 1.9f to 0.08f)
     Canvas(Modifier.fillMaxSize()) {
-        val waves = if (loops) listOf(p1 to 0.05f, p2 to 0.08f) else listOf(0.6f to 0.05f, 1.9f to 0.08f)
         waves.forEach { (phase, alpha) ->
             val path = androidx.compose.ui.graphics.Path()
             path.moveTo(0f, size.height)

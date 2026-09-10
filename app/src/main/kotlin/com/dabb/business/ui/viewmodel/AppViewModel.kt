@@ -115,8 +115,18 @@ class AppViewModel internal constructor(
         if (piasters > 0) { settings.defaultPricePiasters = piasters; defaultPricePiasters = piasters }
     }
 
+    /**
+     * العيب 18: أول اكتمال جلب — يفرّق «جارٍ التحميل» عن «البيانات فارغة
+     * فعلاً»، فلا يظهر الهيكل العظمي 1500ms عند كل عودة لتبويب المخزون.
+     */
+    var dataLoaded by androidx.compose.runtime.mutableStateOf(false)
+        private set
+
     fun refreshAll() {
-        refreshInventory(); refreshStats(); refreshRecent(); refreshDebtors(); refreshCustomers()
+        val jobs = listOf(
+            refreshInventory(), refreshStats(), refreshRecent(), refreshDebtors(), refreshCustomers()
+        )
+        viewModelScope.launch { jobs.forEach { it.join() }; dataLoaded = true }
     }
 
     fun refreshInventory() = launch {

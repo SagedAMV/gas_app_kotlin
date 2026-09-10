@@ -37,15 +37,18 @@ import androidx.compose.ui.unit.dp
  */
 @Composable
 private fun shimmerBrush(base: Color, highlight: Color): Brush {
-    val loops = motionLoopsAllowed()
-    val transition = rememberInfiniteTransition(label = "shimmer")
-    val t by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(1150, easing = LinearEasing)),
-        label = "shimmerT"
-    )
-    val x = if (loops) t else 0.35f
+    // العيب 17: الحلقة تُنشأ داخل الفرع — كان الشيمر يعمل 60 إطاراً/ثانية
+    // حتى مع «تقليل الحركة» (الوضع الذي وُجد أصلاً لتخفيف الحمل)
+    val x = if (motionLoopsAllowed()) {
+        val transition = rememberInfiniteTransition(label = "shimmer")
+        val t by transition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(1150, easing = LinearEasing)),
+            label = "shimmerT"
+        )
+        t
+    } else 0.35f
     val w = 900f
     return Brush.linearGradient(
         colors = listOf(base, highlight, base),

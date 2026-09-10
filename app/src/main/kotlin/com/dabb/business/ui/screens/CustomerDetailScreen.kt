@@ -58,6 +58,8 @@ fun CustomerDetailScreen(customerId: String, onBack: () -> Unit) {
     var cardFlipped by rememberSaveable { mutableStateOf(false) }
     var paySuccess by remember { mutableStateOf(false) }
     var paySuccessAmount by remember { mutableStateOf("") }
+    // العيب 22: نبضة زمن موحدة لكل صفوف «منذ X» في الشاشة
+    val nowTick = rememberNowTick()
 
     LaunchedEffect(customerId, refreshKey) {
         detail = viewModel.getCustomerDetail(customerId)
@@ -173,7 +175,7 @@ fun CustomerDetailScreen(customerId: String, onBack: () -> Unit) {
                             actionIcon = Icons.Filled.Delete,
                             onAction = { confirmCancelSale = sale }
                         ) {
-                            SaleHistoryRow(sale, showAction = false) { }
+                            SaleHistoryRow(sale, showAction = false, now = nowTick) { }
                         }
                         if (i < d.sales.lastIndex) DividerSoft()
                     }
@@ -193,7 +195,7 @@ fun CustomerDetailScreen(customerId: String, onBack: () -> Unit) {
                             actionIcon = Icons.Filled.Delete,
                             onAction = { confirmReversePayment = p }
                         ) {
-                            PaymentRow(p, showAction = false) { }
+                            PaymentRow(p, showAction = false, now = nowTick) { }
                         }
                         if (i < d.payments.lastIndex) DividerSoft()
                     }
@@ -337,7 +339,7 @@ private fun MiniStat(label: String, valuePiasters: Long, modifier: Modifier = Mo
 }
 
 @Composable
-private fun SaleHistoryRow(sale: SaleEntity, showAction: Boolean = true, onCancel: () -> Unit) {
+private fun SaleHistoryRow(sale: SaleEntity, showAction: Boolean = true, now: Long = System.currentTimeMillis(), onCancel: () -> Unit) {
     val paid = sale.status == SaleStatus.PAID
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically) {
@@ -348,7 +350,7 @@ private fun SaleHistoryRow(sale: SaleEntity, showAction: Boolean = true, onCance
         Column(Modifier.weight(1f)) {
             Text("${sale.unitsSold} أسطوانة · ${Money.format(sale.totalAmount)} ريال",
                 style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-            Text("${if (paid) "سدد" else "بالأجل"} · ${timeAgoLocal(sale.saleDate)}",
+            Text("${if (paid) "سدد" else "بالأجل"} · ${timeAgoLocal(sale.saleDate, now)}",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         if (showAction) IconButton(onClick = onCancel) {
@@ -359,7 +361,7 @@ private fun SaleHistoryRow(sale: SaleEntity, showAction: Boolean = true, onCance
 }
 
 @Composable
-private fun PaymentRow(p: PaymentEntity, showAction: Boolean = true, onReverse: () -> Unit) {
+private fun PaymentRow(p: PaymentEntity, showAction: Boolean = true, now: Long = System.currentTimeMillis(), onReverse: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Filled.Payments, null, tint = MaterialTheme.colorScheme.primary,
@@ -367,7 +369,7 @@ private fun PaymentRow(p: PaymentEntity, showAction: Boolean = true, onReverse: 
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text("دفعة تحصيل", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-            Text(timeAgoLocal(p.paymentDate), style = MaterialTheme.typography.bodySmall,
+            Text(timeAgoLocal(p.paymentDate, now), style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Text("+${Money.format(p.amount)} ريال", style = MaterialTheme.typography.titleSmall,
@@ -410,4 +412,4 @@ private fun EditCustomerDialog(initialName: String, initialPhone: String,
     )
 }
 
-internal fun timeAgoLocal(millis: Long): String = timeAgo(millis)
+internal fun timeAgoLocal(millis: Long, now: Long = System.currentTimeMillis()): String = timeAgo(millis, now)

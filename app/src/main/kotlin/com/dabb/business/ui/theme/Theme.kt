@@ -119,8 +119,15 @@ fun AppTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable ()
     // الخطوة 28 (دليل إعادة التصميم): تهيئة تفضيل تقليل الحركة من الإعدادات —
     // قراءة الحالة التفاعلية تضمن انعكاس تبديل المفتاح فوراً في كل الشاشات.
     val ctx = LocalContext.current
-    androidx.compose.runtime.LaunchedEffect(Unit) {
-        MotionPreferences.reducedMotion = SettingsStore(ctx).reducedMotion
+    // العيب 6ج: مفتاح التطبيق + إعداد النظام «إزالة الحركة» معاً —
+    // حساسية حركية/دوار: من فعّلها في النظام تظل عنده الموجات والكونفيتي
+    androidx.compose.runtime.SideEffect {
+        val animatorOff = android.provider.Settings.Global.getFloat(
+            ctx.contentResolver,
+            android.provider.Settings.Global.ANIMATOR_DURATION_SCALE,
+            1f
+        ) == 0f
+        MotionPreferences.reducedMotion = SettingsStore(ctx).reducedMotion || animatorOff
     }
     val colors = if (darkTheme) DarkColors else LightColors
     MaterialTheme(

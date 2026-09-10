@@ -78,10 +78,9 @@ fun InventoryScreen(
     var showAdded by remember { mutableStateOf(false) }
     var showIntake by remember { mutableStateOf(false) }
     var intakeError by remember { mutableStateOf<String?>(null) }
-    // §6.1: هيكل تحميل لأول جلب (يحل محل الظهور الفارغ المفاجئ)
-    var everLoaded by remember { mutableStateOf(false) }
-    LaunchedEffect(recent) { if (recent.isNotEmpty()) everLoaded = true }
-    LaunchedEffect(Unit) { delay(1500); everLoaded = true }
+    // العيب 18: الهيكل مرتبط بحالة تحميل حقيقية (dataLoaded في ViewModel)
+    // لا بمؤقت 1500ms كان يومض شيمراً عند كل عودة للتبويب ولو جاهزة البيانات
+    val nowTick = rememberNowTick()
     // §6.1: سهم اتجاه التغيّر عند أي تحديث حي لعدّاد المتوفر
     var lastAvailable by remember { mutableStateOf(available) }
     var deltaDir by remember { mutableStateOf(0) }
@@ -258,8 +257,8 @@ fun InventoryScreen(
                             .clickable(onClick = onNavigateToSales))
                 }
                 Spacer(Modifier.height(2.dp))
-                if (recent.isEmpty() && !everLoaded) {
-                    // §7.3: شيمر بدل الظهور الفارغ المفاجئ
+                if (recent.isEmpty() && !viewModel.dataLoaded) {
+                    // §7.3: شيمر لأول جلب فقط — بعدها «فارغ فعلاً» يعرض رسالته مباشرة
                     SkeletonCard(3)
                 } else Card(shape = RoundedCornerShape(18.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -272,7 +271,7 @@ fun InventoryScreen(
                         }
                     } else {
                         recent.forEachIndexed { index, sale ->
-                            SaleRow(sale)
+                            SaleRow(sale, nowTick)
                             if (index < recent.lastIndex)
                                 HorizontalDivider(Modifier.padding(horizontal = 12.dp),
                                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
@@ -286,7 +285,7 @@ fun InventoryScreen(
 }
 
 @Composable
-private fun SaleRow(sale: SaleEntity) {
+private fun SaleRow(sale: SaleEntity, now: Long) {
     val paid = sale.status == SaleStatus.PAID
     val accent = if (paid) SuccessGreen else MaterialTheme.colorScheme.error
     Row(
@@ -302,7 +301,7 @@ private fun SaleRow(sale: SaleEntity) {
         Column(Modifier.weight(1f)) {
             Text("بيع لـ «${sale.customerName}»", style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold, maxLines = 1)
-            Text("${sale.unitsSold} أسطوانة · ${if (paid) "سدد" else "بالأجل"} · ${timeAgo(sale.saleDate)}",
+            Text("${sale.unitsSold} أسطوانة · ${if (paid) "سدد" else "بالأجل"} · ${timeAgo(sale.saleDate, now)}",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (sale.notes.isNotBlank())
                 Text("ملاحظة: ${sale.notes}", style = MaterialTheme.typography.labelSmall,
@@ -316,14 +315,30 @@ private fun SaleRow(sale: SaleEntity) {
     }
 }
 
-internal fun timeAgo(millis: Long): String {
-    val minutes = (System.currentTimeMillis() - millis) / 60000
+internal fun timeAgo(millis: Long, now: Long = System.currentTimeMillis()): String {
+    // العيب 22: طابع مستقبلي (ساعة الجهاز قُدّمت) لا يعرض «الآن» للأبد —
+    // القيم السالبة تُحبس في صفر = «الآن» لحظتها فقط، والآنَ يُمرَّر من
+    // مؤقّت الشاشة فتتحدث «منذ X دقيقة» كل دقيقة بدل أن تتقادم ساكنة
+    val minutes = ((now - millis) / 60000L).coerceAtLeast(0L)
     return when {
         minutes < 1 -> "الآن"
         minutes < 60 -> "منذ $minutes دقيقة"
         minutes < 1440 -> "منذ ${minutes / 60} ساعة"
         else -> "منذ ${minutes / 1440} يوم"
     }
+}
+
+/**
+ * نبضة زمن واحدة لكل شاشة (ليس لكل صف) — توقظ كل 60 ثانية فتُعيد حساب
+ * «منذ X دقيقة» في كل الصفوف دفعة واحدة (العيب 22).
+ */
+@Composable
+internal fun rememberNowTick(): Long {
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) { delay(60_000); now = System.currentTimeMillis() }
+    }
+    return now
 }
 
 /**
