@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dabb.business.ui.components.sharedAppViewModel
@@ -199,9 +200,8 @@ fun ReportsScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("أعلى الزبائن ديناً", style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.weight(1f))
-                    Text("عرض الكل", style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClick = onOpenCustomers))
+                    // العيب 16: هدف لمس ≥48dp
+                    TextButton(onClick = onOpenCustomers) { Text("عرض الكل") }
                 }
                 Spacer(Modifier.height(2.dp))
                 Card(shape = RoundedCornerShape(18.dp),
@@ -295,7 +295,8 @@ private fun DebtorRow(c: CustomerEntity, onClick: () -> Unit = {}) {
         }
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
-            Text(c.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            Text(c.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(if (c.phone.isNotBlank()) c.phone else "بدون تلفون",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }

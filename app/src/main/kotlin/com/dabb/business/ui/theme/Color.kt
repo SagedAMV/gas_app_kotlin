@@ -56,3 +56,8 @@ val DarkBlueContainer = Color(0xFF2B4266)
 val OnDarkBlueContainer = Color(0xFFD5E2FA)
 val DarkOutLine = Color(0xFF8A9BB2)
 val DarkSurfaceHigh = Color(0xFF2A3542)
+
+// العيب 15 (تقرير 2026-09-10): ألوان دلتا المخزون فوق خلفية TealDeep المركّبة
+// (أبيض alpha=0.13 فوق التدرّج ⇒ #467E73) — مستوفية 3:1/4.5:1 محسوبة بمعادلة WCAG
+val DeltaUpOnTeal = Color(0xFF9DF7C4)     // ≈ 5.4:1 على #467E73
+val DeltaDownOnTeal = Color(0xFFFFC9C2)   // ≈ 6.6:1 على #467E73

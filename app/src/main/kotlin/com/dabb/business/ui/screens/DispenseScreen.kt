@@ -224,7 +224,7 @@ fun DispenseScreen() {
                                 Row(
                                     Modifier.fillMaxWidth()
                                         .clickable { selectedCustomer = c; customerQuery = c.name }
-                                        .padding(horizontal = 12.dp, vertical = 9.dp),
+                                        .padding(horizontal = 12.dp, vertical = 12.dp),   // العيب 16: هدف ≥48dp
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Avatar(c.name)

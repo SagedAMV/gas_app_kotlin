@@ -29,6 +29,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -55,6 +56,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 import com.dabb.business.ui.components.AppHeader
+import com.dabb.business.ui.theme.DeltaDownOnTeal
+import com.dabb.business.ui.theme.DeltaUpOnTeal
 import com.dabb.business.ui.theme.SuccessGreen
 import com.dabb.business.ui.theme.TealDeep
 import com.dabb.business.ui.viewmodel.AppViewModel
@@ -150,16 +153,17 @@ fun InventoryScreen(
                                             // سهم التغيّر الحي: أخضر للأعلى/أحمر للأسفل — وميض 700ms
                                             if (deltaDir != 0) {
                                                 Spacer(Modifier.width(4.dp))
+                                                // العيب 15: ألوان مستوفية للتباين بدل inline فاشلة (2.05–2.68:1)
                                                 Text(
                                                     if (deltaDir > 0) "▲" else "▼",
-                                                    color = if (deltaDir > 0) Color(0xFF4ADE80) else Color(0xFFFF8A80),
+                                                    color = if (deltaDir > 0) DeltaUpOnTeal else DeltaDownOnTeal,
                                                     fontSize = 13.sp, fontWeight = FontWeight.Bold
                                                 )
                                             }
                                             Spacer(Modifier.width(4.dp))
-                                            BreathingIndicator(size = 8.dp, color = Color(0xFF4ADE80))
+                                            BreathingIndicator(size = 8.dp, color = DeltaUpOnTeal)
                                         }
-                                        Text("متوفر الآن", color = Color.White.copy(alpha = 0.72f),
+                                        Text("متوفر الآن", color = Color.White,   // العيب 15: 3.26→4.67:1 (الأبيض الصافي وحده يجتاز 4.5)
                                             fontSize = 10.5.sp, fontWeight = FontWeight.Medium)
                                     }
                                 }
@@ -167,7 +171,7 @@ fun InventoryScreen(
                                     .background(Color.White.copy(alpha = 0.13f)).padding(10.dp)) {
                                     Column {
                                         AnimatedNumber(sold, style = MaterialTheme.typography.titleLarge, color = Color.White)
-                                        Text("مباع", color = Color.White.copy(alpha = 0.72f),
+                                        Text("مباع", color = Color.White,
                                             fontSize = 10.5.sp, fontWeight = FontWeight.Medium)
                                     }
                                 }
@@ -220,13 +224,14 @@ fun InventoryScreen(
                     val nudge = remember { Animatable(0f) }
                     val loopsAllowed = motionLoopsAllowed()
                     LaunchedEffect(available) {
+                        // العيب 23: لا حلقة أبدياً إلا والحاجة قائمة — المخزون
+                        // السليم (10+) أو تقليل الحركة = لا مؤقّت أصلاً
+                        if (!loopsAllowed || available >= 10) return@LaunchedEffect
                         while (true) {
                             delay(if (available <= 2) 2000L else if (available <= 5) 3000L else 4000L)
-                            if (loopsAllowed && available < 10) {
-                                nudge.animateTo(6f, tween(120))
-                                nudge.animateTo(-6f, tween(240))
-                                nudge.animateTo(0f, tween(120))
-                            }
+                            nudge.animateTo(6f, tween(120))
+                            nudge.animateTo(-6f, tween(240))
+                            nudge.animateTo(0f, tween(120))
                         }
                     }
                     OutlinedButton(onClick = { intakeError = null; showIntake = true },
@@ -251,10 +256,8 @@ fun InventoryScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("آخر الحركات", style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.weight(1f))
-                    Text("عرض الكل", style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.clip(RoundedCornerShape(6.dp))
-                            .clickable(onClick = onNavigateToSales))
+                    // العيب 16: TextButton — هدف لمس ≥48dp (كان النص وحده ≈15dp)
+                    TextButton(onClick = onNavigateToSales) { Text("عرض الكل") }
                 }
                 Spacer(Modifier.height(2.dp))
                 if (recent.isEmpty() && !viewModel.dataLoaded) {
@@ -300,7 +303,7 @@ private fun SaleRow(sale: SaleEntity, now: Long) {
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text("بيع لـ «${sale.customerName}»", style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold, maxLines = 1)
+                fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text("${sale.unitsSold} أسطوانة · ${if (paid) "سدد" else "بالأجل"} · ${timeAgo(sale.saleDate, now)}",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (sale.notes.isNotBlank())

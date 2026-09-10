@@ -21,7 +21,8 @@ import com.dabb.business.ui.animation.MotionPreferences
 
 /**
  * ثيم متكامل (Material 3) بهوية دبب البترول:
- * - نظام ألوان كامل (فاving/داكن) — لا ألوان افتراضية مبعثرة
+ * (العيب 23: أحجام الخطوط صارت صحيحة — نصف البكسل يُقرَّب differently بين الأجهزة)
+ * - نظام ألوان كامل (فاتح/داكن) — لا ألوان افتراضية مبعثرة
  * - خطوط بخريطة وزن واضحة (أرقام ثقيلة، عناوين بارزة)
  * - أشكال بطاقات دائرية ناعمة موحّدة
  */
@@ -95,13 +96,13 @@ private val AppTypography = Typography(
     headlineMedium = TextStyle(fontWeight = FontWeight.ExtraBold, fontSize = 26.sp, lineHeight = 32.sp),
     headlineSmall = TextStyle(fontWeight = FontWeight.ExtraBold, fontSize = 22.sp, lineHeight = 28.sp),
     titleLarge = TextStyle(fontWeight = FontWeight.Bold, fontSize = 19.sp, lineHeight = 25.sp),
-    titleMedium = TextStyle(fontWeight = FontWeight.Bold, fontSize = 15.5.sp, lineHeight = 21.sp),
-    titleSmall = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp, lineHeight = 19.sp),
+    titleMedium = TextStyle(fontWeight = FontWeight.Bold, fontSize = 15.sp, lineHeight = 21.sp),
+    titleSmall = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 13.sp, lineHeight = 19.sp),
     bodyLarge = TextStyle(fontWeight = FontWeight.Normal, fontSize = 15.sp, lineHeight = 22.sp),
     bodyMedium = TextStyle(fontWeight = FontWeight.Normal, fontSize = 13.sp, lineHeight = 19.sp),
-    bodySmall = TextStyle(fontWeight = FontWeight.Normal, fontSize = 11.5.sp, lineHeight = 16.sp),
-    labelLarge = TextStyle(fontWeight = FontWeight.Bold, fontSize = 14.5.sp, lineHeight = 20.sp),
-    labelMedium = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp, lineHeight = 17.sp),
+    bodySmall = TextStyle(fontWeight = FontWeight.Normal, fontSize = 11.sp, lineHeight = 16.sp),
+    labelLarge = TextStyle(fontWeight = FontWeight.Bold, fontSize = 14.sp, lineHeight = 20.sp),
+    labelMedium = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 12.sp, lineHeight = 17.sp),
     labelSmall = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 11.sp, lineHeight = 15.sp)
 )
 

@@ -64,9 +64,23 @@ fun SalesHistoryScreen() {
             sales = first
             canLoadMore = first.size == pageSize
         } else {
+            // العيب 19: مدخل يشبه التاريخ لكنه بصيغة غير مدعومة لا «يسقط» في
+            // بحث الأسماء فترجع «لا نتائج» كاذبة — بل يشرح الصيغة المقبولة
             val dayRange = parseSaleDay(q)
-            sales = if (dayRange != null) viewModel.getSalesBetween(dayRange.first, dayRange.second)
-                    else viewModel.searchSalesByNameOrNotes(q)
+            when {
+                dayRange != null -> {
+                    dateHint = null
+                    sales = viewModel.getSalesBetween(dayRange.first, dayRange.second)
+                }
+                looksLikeDate(q) -> {
+                    dateHint = "صيغة التاريخ غير مدعومة — استخدم 2026/9/2 أو 2026-09-02 أو 2/9/2026"
+                    sales = emptyList()
+                }
+                else -> {
+                    dateHint = null
+                    sales = viewModel.searchSalesByNameOrNotes(q)
+                }
+            }
             totalCount = sales.size
             canLoadMore = false
         }
@@ -81,11 +95,16 @@ fun SalesHistoryScreen() {
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
-                label = { Text("بحث بالاسم أو التاريخ (مثل 2026/9/2)") },
+                label = { Text("بحث بالاسم أو التاريخ (2026/9/2 أو 2026-09-02)") },
                 leadingIcon = { Icon(Icons.Filled.Search, null, modifier = Modifier.size(18.dp)) },
                 singleLine = true, shape = RoundedCornerShape(14.dp),
                 modifier = Modifier.fillMaxWidth()
             )
+
+            dateHint?.let { hint ->
+                Text(hint, style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error)
+            }
 
             opError?.let { msg ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -175,8 +194,16 @@ fun SalesHistoryScreen() {
 }
 
 /** يحلل التاريخ المكتوب (2026/9/2 أو 2026/09/02) إلى نطاق اليوم الكامل (من 00:00 حتى 24:00). */
+// العيب 19: صيغ مدعومة أوسع — الشرطة والدَّور المعكوس، لا القاطع المفرد فقط
+private val DATE_FORMATS = listOf("yyyy/M/d", "yyyy-MM-dd", "d/M/yyyy", "d-M-yyyy")
+
+/** يبدو تاريخاً (رقمان فاصلان وأرقام كافية) لكنه لم يُحلَّل — لرسالة الصيغة. */
+private fun looksLikeDate(q: String) =
+    q.count { it == '/' || it == '-' || it == '.' } == 2 &&
+        q.filter { it.isDigit() }.length >= 6
+
 private fun parseSaleDay(q: String): Pair<Long, Long>? {
-    for (fmt in listOf("yyyy/M/d", "yyyy/MM/dd")) {
+    for (fmt in DATE_FORMATS) {
         val sdf = SimpleDateFormat(fmt, Locale.getDefault())
         sdf.isLenient = false
         val d = try { sdf.parse(q) } catch (e: Exception) { null } ?: continue
@@ -188,7 +215,10 @@ private fun parseSaleDay(q: String): Pair<Long, Long>? {
             set(Calendar.MILLISECOND, 0)
         }
         val from = cal.timeInMillis
-        return from to from + 24L * 3600 * 1000
+        // العيب 19: يوم تقويمي حقيقي — +24 ساعة ثابتة قد تفقد عملية عند
+        // حدّ التوقيت الصيفي/الشتوي
+        cal.add(Calendar.DAY_OF_YEAR, 1)
+        return from to cal.timeInMillis
     }
     return null
 }

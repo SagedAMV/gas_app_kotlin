@@ -180,7 +180,11 @@ class AppViewModel internal constructor(
 
     /** إصلاح الفحص L13: بحث على مستوى القاعدة — الاسم أو الملاحظات. */
     suspend fun searchSalesByNameOrNotes(q: String): List<SaleEntity> =
-        saleDao.searchByNameOrNotes(q.trim())
+        saleDao.searchByNameOrNotes(escapeLike(q))
+
+    /** العيب 7: '%' و'_' محارف نمط في LIKE — تُهرَّب قبل التمرير للـ DAO. */
+    private fun escapeLike(q: String) = q.trim()
+        .replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
     /** نطاق يومي كامل (لبحث التاريخ في سجل المبيعات). */
     suspend fun getSalesBetween(from: Long, to: Long): List<SaleEntity> =
@@ -199,7 +203,7 @@ class AppViewModel internal constructor(
 
     // ===== الزبائن =====
     suspend fun searchCustomers(q: String): List<CustomerEntity> =
-        if (q.isBlank()) emptyList() else custDao.search(q.trim())
+        if (q.isBlank()) emptyList() else custDao.search(escapeLike(q))
 
     suspend fun getCustomerDetail(id: String): CustomerDetail {
         val customer = custDao.getById(id)

@@ -31,7 +31,8 @@ interface CustomerDao {
     suspend fun findByName(name: String): CustomerEntity?
 
     /** إصلاح الخطأ 10: ‏LIMIT 50 — اقتراحات البحث تكفي بها عشرات (حماية الذاكرة). */
-    @Query("SELECT * FROM customers WHERE name LIKE '%' || :q || '%' OR phone LIKE '%' || :q || '%' ORDER BY name COLLATE NOCASE ASC LIMIT 50")
+    // العيب 7: ESCAPE — '%' و'_' في مدخل المستخدم كانا يعملان كـ wildcards
+    @Query("SELECT * FROM customers WHERE name LIKE '%' || :q || '%' ESCAPE '\\' OR phone LIKE '%' || :q || '%' ESCAPE '\\' ORDER BY name COLLATE NOCASE ASC LIMIT 50")
     suspend fun search(q: String): List<CustomerEntity>
 
     /** المدينون: كاش الحقول يطابق الرصيد المشتق (يُعاد حسابه في المعاملات).

@@ -67,7 +67,8 @@ interface SaleDao {
     suspend fun getCount(): Int
 
     /** بحث خادمي بالاسم أو الملاحظات (200 أحدث) — يصلح البحث الذي كان محصوراً في الصفحات المحمَّلة فقط. */
-    @Query("SELECT * FROM sales WHERE customerName LIKE '%' || :q || '%' OR notes LIKE '%' || :q || '%' ORDER BY saleDate DESC LIMIT 200")
+    // العيب 7: ESCAPE — مثل CustomerDao.search
+    @Query("SELECT * FROM sales WHERE customerName LIKE '%' || :q || '%' ESCAPE '\\' OR notes LIKE '%' || :q || '%' ESCAPE '\\' ORDER BY saleDate DESC LIMIT 200")
     suspend fun searchByNameOrNotes(q: String): List<SaleEntity>
 
     /** نطاق تاريخي (يوم كامل) — لبحث التاريخ في سجل المبيعات. */

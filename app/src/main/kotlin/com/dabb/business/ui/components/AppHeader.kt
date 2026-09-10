@@ -83,22 +83,23 @@ fun AppHeader(
                     fontWeight = FontWeight.Medium
                 )
             }
+            // العيب 23: صندوق أيقونة الشاشة كان يُرسم فقط بلا trailing —
+            // فالمعامل icon كانت تمرره كل شاشة بلا أثر في نصف الحالات
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .background(Color.White.copy(alpha = 0.16f), RoundedCornerShape(10.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
             if (trailing != null) {
                 trailing()
-            } else {
-                Box(
-                    modifier = Modifier
-                        .size(34.dp)
-                        .background(Color.White.copy(alpha = 0.16f), RoundedCornerShape(10.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
             }
         }
     }
