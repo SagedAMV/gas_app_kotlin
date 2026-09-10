@@ -41,15 +41,19 @@ class SettingsStore(context: Context) {
     }
 
     /**
-     * إصلاح الفحص M8: قفل تدرجي ضد التخمين على جهاز مفقود —
-     * 4 أرقام = 10,000 احتمال، وبلا حد للمحاولات يصبح التخمين ممكناً.
-     * بعد MAX_ATTEMPTS محاولة خاطئة متتالية: قفل LOCK_MS.
+     * إصلاح الفحص M8 + العيب 2 (تقرير 2026-09-10): قفل تدرّجي **متصاعد** ضد
+     * التخمين على جهاز مفقود — 4 أرقام = 10,000 احتمال، وبلا حد يصبح مسحها
+     * ممكناً عبر إعادة التشغيل. الحالة في SharedPreferences فتصمد لإعادة
+     * التشغيل، وكل MAX_ATTEMPTS محاولات خاطئة إضافية تقفز درجة في السلّم:
+     * 60ث ← 5د ← 30د ← ساعتان.
      */
     fun pinLockRemainingMs(now: Long = System.currentTimeMillis()): Long {
         val fails = prefs.getInt(KEY_PIN_FAILS, 0)
         if (fails < MAX_ATTEMPTS) return 0L
+        val tier = ((fails - MAX_ATTEMPTS) / MAX_ATTEMPTS).coerceIn(0, LOCK_LADDER.lastIndex)
+        val lockMs = LOCK_LADDER[tier]
         val elapsed = now - prefs.getLong(KEY_PIN_LAST_FAIL, 0L)
-        return if (elapsed < LOCK_MS) LOCK_MS - elapsed else 0L
+        return if (elapsed < lockMs) lockMs - elapsed else 0L
     }
 
     /** يسجّل محاولة فاشلة ويُرجع المدة المتبقية للقفل إن تراكمت المحاولات. */
@@ -97,6 +101,7 @@ class SettingsStore(context: Context) {
         private const val KEY_PIN_LAST_FAIL = "pin_last_fail"
         private const val KEY_REDUCED_MOTION = "reduced_motion"
         private const val MAX_ATTEMPTS = 5
-        private const val LOCK_MS = 60_000L
+        // سلّم التصعيد (العيب 2): 60ث ← 5د ← 30د ← ساعتان
+        private val LOCK_LADDER = longArrayOf(60_000L, 300_000L, 1_800_000L, 7_200_000L)
     }
 }

@@ -265,7 +265,7 @@ class AppViewModelTest {
      * (insertValidated) ترفض التحصيل الصفري/السالب.
      */
     @Test
-    fun dao_rejects_zero_payment() {
+    fun dao_rejects_zero_payment() = runTest {
         val result = runCatching {
             db.paymentDao().insertValidated(
                 PaymentEntity(
@@ -275,5 +275,32 @@ class AppViewModelTest {
             )
         }
         assertTrue("التحصيل الصفري يجب أن يُرفض داخل PaymentDao", result.isFailure)
+    }
+
+    /**
+     * العيب 2 (تقرير 2026-09-10): القفل التدرّجي يصمد عبر «إعادة تشغيل التطبيق» —
+     * الحالة تُقرأ من SharedPreferences لا من ذاكرة الشاشة، والمدة تتصاعد.
+     */
+    @Test
+    fun lockout_survives_app_restart() {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        val store = SettingsStore(app)
+        try {
+            store.setPin("1234")
+            // 5 محاولات خاطئة ⇒ قفل الدرجة الأولى (60 ثانية)
+            repeat(5) { store.registerPinFailure(now = 1_000L) }
+            assertTrue(store.pinLockRemainingMs(now = 2_000L) > 0L)
+            // «إعادة تشغيل» = كائن جديد يقرأ نفس التفضيلات
+            val afterRestart = SettingsStore(app)
+            assertTrue(afterRestart.pinLockRemainingMs(now = 2_000L) > 0L)
+            // التصعيد: 10 محاولات ⇒ الدرجة الثانية (5 دقائق)
+            repeat(5) { store.registerPinFailure(now = 3_000L) }
+            assertTrue(SettingsStore(app).pinLockRemainingMs(now = 3_000L) > 60_000L)
+            // التصفير ينهي القفل
+            store.resetPinFailures()
+            assertEquals(0L, afterRestart.pinLockRemainingMs(now = 4_000L))
+        } finally {
+            store.resetPinFailures(); store.clearPin()
+        }
     }
 }

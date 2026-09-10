@@ -109,11 +109,14 @@ fun PinGate(onUnlocked: () -> Unit) {
     var error by remember { mutableStateOf(false) }
     var shakeKey by remember { mutableIntStateOf(0) }
     var errorFlash by remember { mutableIntStateOf(0) }
-    var lockRemainingMs by remember { mutableStateOf(0L) }
+    // العيب 2: التهيئة من المتجر — القفل يصمد عبر إعادة تشغيل التطبيق
+    // (كانت تبدأ من صفر فتُقبل أول محاولة بعد كل إقلاع جديد)
+    var lockRemainingMs by remember { mutableStateOf(store.pinLockRemainingMs()) }
 
     LaunchedEffect(lockRemainingMs) {
         while (lockRemainingMs > 0L) {
-            delay(500)
+            // آخر نبضة دقيقة: لا ننتظر 500ms كاملة إذا بقي أقل منها
+            delay(minOf(500L, lockRemainingMs))
             lockRemainingMs = store.pinLockRemainingMs()
         }
     }
