@@ -98,15 +98,14 @@ fun InventoryScreen(
             error = intakeError,
             onDismiss = { showIntake = false },
             onConfirm = { units, cost, paidNow ->
-                scope.launch {
-                    var ok = true
-                    viewModel.purchaseFromStation(units, cost, paidNow, "") { err ->
-                        if (err != null) { ok = false; intakeError = err }
-                    }
-                    if (ok) {
+                // العيب 14: النتيجة داخل الـ callback حصراً — الدالة تعيد Job
+                // وتنفّذ في coroutine آخر، فقياس ok بعد الإطلاق مباشرة كان يقرأ
+                // true دائماً ⇒ حوار يُغلق وشارة نجاح خضراء حتى عند الرفض
+                viewModel.purchaseFromStation(units, cost, paidNow, "") { err ->
+                    if (err == null) {
                         showIntake = false; showAdded = true
-                        kotlinx.coroutines.delay(2200); showAdded = false
-                    }
+                        scope.launch { kotlinx.coroutines.delay(2200); showAdded = false }
+                    } else intakeError = err
                 }
             }
         )

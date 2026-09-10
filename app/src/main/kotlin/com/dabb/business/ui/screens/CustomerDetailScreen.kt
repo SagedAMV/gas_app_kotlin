@@ -212,7 +212,7 @@ fun CustomerDetailScreen(customerId: String, onBack: () -> Unit) {
                             showPay = false; refreshKey++
                             paySuccessAmount = Money.format(amountPiasters)
                             paySuccess = true
-                        }
+                        } else opError = e   // العيب 21: الحوار يبقى مفتوحاً والخطأ يُعرض محلياً
                     }
                 }
             }

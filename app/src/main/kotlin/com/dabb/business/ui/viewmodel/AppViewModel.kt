@@ -361,20 +361,30 @@ payDao.insertValidated(
             db.withTransaction {
                 // إصلاح المشكلة 3: منع الإلغاء إذا وُجدت تحصيلات لاحقة لنفس الزبون —
                 // وإلا فقد الزبون نقداً دُفع مقابل بيع اختفى من السجلات.
-                val laterPayment = payDao.getByCustomer(sale.customerId)
-                    .any { it.paymentDate > sale.saleDate }
-                if (laterPayment)
-                    error("يوجد تحصيلات لاحقة على هذا البيع. ألغِ التحصيلات أولاً ثم ألغِ البيع.")
+                // العيب 9: الرسالة صارت قابلة للتصرف — عدد ومجموع الدفعات
+                // وأقدمها بدل أمر غامض يدفع لعكس دفعات صحيحة.
+                val laterPayments = payDao.getByCustomer(sale.customerId)
+                    .filter { it.paymentDate > sale.saleDate }
+                if (laterPayments.isNotEmpty()) {
+                    val oldest = java.text.SimpleDateFormat("yyyy/M/d HH:mm", java.util.Locale.getDefault())
+                        .format(java.util.Date(laterPayments.minOf { it.paymentDate }))
+                    error(
+                        "لا يمكن الإلغاء: توجد ${laterPayments.size} دفعة لاحقة على هذا الزبون " +
+                            "بمجموع ${Money.format(laterPayments.sumOf { it.amount })} ريال (أقدمها $oldest). " +
+                            "ألغِ تلك الدفعات أولاً إن كانت سُجّلت بالخطأ — وإلا فراجع حساب الزبون يدوياً."
+                    )
+                }
                 val ids = parseCylinderIds(sale.cylinderIdsJson)
                 // إصلاح المشكلة 2: تُعاد فقط الأسطوانات ما زالت معلّمة بهذا البيع
                 // (مطابقة soldDate) — أسطوانة أُعيد بيعها لاحقاً لا تُمس.
-                // إصلاح الخطأ 2 (الجديد): التحقق من العدد المُعاد — إن نقص، تُلغى
-                // المعاملة كاملة بدل حذف البيع وترك أسطوانات مفقودة للأبد.
-                if (ids.isNotEmpty()) {
-                    val restored = cylDao.markAvailable(ids, sale.saleDate)
-                    check(restored == ids.size) {
-                        "تعذّر إرجاع ${ids.size - restored} أسطوانة من هذا البيع — أُلغي الإلغاء"
-                    }
+                // إصلاح الخطأ 2 + العيب 10: التحقق خارج حارس isNotEmpty —
+                // صف بيع بلا cylinderIdsJson (ممكن من نسخة احتياطية قديمة/تالفة)
+                // كان يُحذف دون إرجاع مخزونه ⇒ أسطوانات SOLD بلا مرجع إلى الأبد.
+                val restored = if (ids.isEmpty()) 0 else cylDao.markAvailable(ids, sale.saleDate)
+                check(ids.size == sale.unitsSold && restored == ids.size) {
+                    "بيانات أسطوانات هذا البيع غير مكتملة " +
+                        "(المسجَّل ${sale.unitsSold} — الموجود ${ids.size} — المُسترجَع $restored). " +
+                        "أُلغي الإلغاء حفاظاً على المخزون."
                 }
                 saleDao.deleteById(saleId)
                 recomputeCustomer(sale.customerId)

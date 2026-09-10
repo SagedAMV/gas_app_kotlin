@@ -183,7 +183,7 @@ fun StationScreen() {
                             successKind = SuccessKind.STATION_PAYMENT
                             successAmount = Money.format(amount)
                             showSuccess = true
-                        }
+                        } else opError = e   // العيب 21: الحوار يبقى مفتوحاً والخطأ يُعرض محلياً
                     }
                 }
             }
