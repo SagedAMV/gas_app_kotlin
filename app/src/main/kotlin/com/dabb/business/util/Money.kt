@@ -19,7 +19,9 @@ object Money {
     /** إدخال نصي بالريال مثل "25000" → 25000. أي إدخال غير صالح = 0.
      *  القيمة تُحبَس ضمن [0, MAX_AMOUNT] — بلا سقف كان يُنتج Long.MAX ← فساد مالي. */
     fun poundsToPiasters(rialsText: String): Long {
-        val v = rialsText.trim().toDoubleOrNull() ?: return 0L
+        // العيب 3: نزع فواصل الآلاف مركزياً — التطبيق نفسه كان يملأ الحقول
+        // بقيمة منسّقة ("25,000") ثم يرفضها toDoubleOrNull. الوحدة الآن هنا.
+        val v = rialsText.trim().replace(",", "").toDoubleOrNull() ?: return 0L
         return Math.round(v).coerceIn(0L, MAX_AMOUNT)
     }
 

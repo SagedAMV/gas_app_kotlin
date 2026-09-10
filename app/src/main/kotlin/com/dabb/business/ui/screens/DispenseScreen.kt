@@ -104,10 +104,10 @@ fun DispenseScreen() {
     val viewModel: AppViewModel = sharedAppViewModel()
     val scope = rememberCoroutineScope()
     val available = viewModel.availableCount
-    val effPrice = priceText ?: Money.format(viewModel.defaultPricePiasters)
+    val effPrice = priceText ?: viewModel.defaultPricePiasters.toString()  // رقم مجرد (العيب 3)
     // إصلاح خطأ إضافي اكتُشف أثناء المشكلة 14: السعر الافتراضي المنسّق يحتوي فواصل
     // آلاف ("25,000") وtoDoubleOrNull لا يفهمها — فكان البيع يفشل دائماً دون لمس الحقل.
-    val pricePiasters = Money.poundsToPiasters(effPrice.replace(",", ""))
+    val pricePiasters = Money.poundsToPiasters(effPrice)  // الفواصل تُنزَع مركزياً في Money (العيب 3)
     val totalPiasters = units.toLong() * pricePiasters
 
     // نبضة توسّع المجموع عند تغيّر الرقم فعلياً (§6.2.6) — نُقل بعد التعريف (خطأ ترجمة)

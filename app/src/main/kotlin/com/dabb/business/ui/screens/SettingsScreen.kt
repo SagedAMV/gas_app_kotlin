@@ -60,12 +60,17 @@ fun SettingsScreen() {
     val scope = rememberCoroutineScope()
     val store = remember { SettingsStore(ctx) }
 
-    var priceText by remember { mutableStateOf(Money.format(viewModel.defaultPricePiasters)) }
+    // العيب 3: رقم مجرد بلا فواصل — القيمة المنسّقة كانت تُرفض عند الحفظ دون تعديل
+    var priceText by remember { mutableStateOf(viewModel.defaultPricePiasters.toString()) }
     var savedMsg by remember { mutableStateOf(false) }
     var priceErr by remember { mutableStateOf<String?>(null) }
     var pinSet by remember { mutableStateOf(store.isPinSet) }
     var pinDialog by remember { mutableStateOf(false) }
     var busyMsg by remember { mutableStateOf<String?>(null) }
+    // العيب 4: الاستيراد يستبدل كل البيانات — أصبح الوحيد بلا حارس بينما
+    // عمليات أقل خطراً (إلغاء بيع…) لها حوار تأكيد
+    var confirmImport by remember { mutableStateOf(false) }
+    var confirmRemovePin by remember { mutableStateOf(false) }
 
     // اختيار ملف للتصدير
     val exportLauncher = rememberLauncherForActivityResult(
@@ -86,10 +91,8 @@ fun SettingsScreen() {
             busyMsg = "جارٍ الاستعادة…"
             val err = viewModel.importDatabase(uri)
             busyMsg = if (err == null) "تمت الاستعادة — سيُعاد فتح التطبيق" else "فشلت الاستعادة: $err"
-            if (err == null) {
-                // إعادة إنشاء العملية لتُحمَّل القاعدة المستوردة
-                (ctx as? android.app.Activity)?.recreate()
-            }
+            // العيب 4④: لا recreate() — importDatabase يطلق إعادة إقلاع كاملة
+            // (NEW_TASK|CLEAR_TASK + exit) والمزدوج كان يتعارض معها
         }
     }
 
@@ -161,7 +164,8 @@ fun SettingsScreen() {
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                         if (pinSet) {
-                            OutlinedButton(onClick = { store.clearPin(); pinSet = false },
+                            // العيب 5: لا مسح للقفل بضغطة واحدة — حوار يطلب الكود الحالي
+                            OutlinedButton(onClick = { confirmRemovePin = true },
                                 shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
                                 Icon(Icons.Filled.LockOpen, contentDescription = null,
                                     modifier = Modifier.size(18.dp))
@@ -224,9 +228,8 @@ fun SettingsScreen() {
                                 Spacer(Modifier.width(6.dp))
                                 Text("نسخ احتياطي")
                             }
-                            OutlinedButton(onClick = {
-                                importLauncher.launch(arrayOf("application/octet-stream", "*/*"))
-                            }, shape = RoundedCornerShape(12.dp), modifier = Modifier.weight(1f)) {
+                            OutlinedButton(onClick = { confirmImport = true },
+                                shape = RoundedCornerShape(12.dp), modifier = Modifier.weight(1f)) {
                                 Icon(Icons.Filled.Restore, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(6.dp))
                                 Text("استعادة")
@@ -285,6 +288,51 @@ fun SettingsScreen() {
             onConfirm = { pin ->
                 store.setPin(pin); pinSet = true; pinDialog = false
             }
+        )
+    }
+
+    // العيب 4①: تأكيد قبل فتح منتقي الملفات — الاستبدال يستهدف كل البيانات
+    if (confirmImport) {
+        AlertDialog(
+            onDismissRequest = { confirmImport = false },
+            shape = RoundedCornerShape(20.dp),
+            title = { Text("استعادة نسخة احتياطية") },
+            text = {
+                Text("سيُستبدل كل ما في التطبيق (المخزون والديون والتحصيلات وحساب المحطة) بمحتوى الملف الذي تختاره.\n\nتُحفَظ نسختك الحالية في ملف أمان داخلي تلقائياً. المتابعة؟")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmImport = false
+                    importLauncher.launch(arrayOf("application/octet-stream", "*/*"))
+                }) { Text("اختر ملفاً واستبدل", fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = { TextButton(onClick = { confirmImport = false }) { Text("تراجع") } }
+        )
+    }
+
+    // العيب 5: إزالة القفل تتطلب الكود الحالي
+    if (confirmRemovePin) {
+        var pin by remember { mutableStateOf("") }
+        var err by remember { mutableStateOf<String?>(null) }
+        AlertDialog(
+            onDismissRequest = { confirmRemovePin = false },
+            shape = RoundedCornerShape(20.dp),
+            title = { Text("إزالة قفل التطبيق") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("أدخل الكود الحالي للتأكيد. بعد الإزالة تصبح كل بيانات الديون بلا حماية.")
+                    PinPadField(pin, { v -> pin = v })
+                    if (err != null) Text(err!!, color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (!store.checkPin(pin)) { err = "الكود غير صحيح"; pin = "" }
+                    else { store.clearPin(); pinSet = false; confirmRemovePin = false }
+                }) { Text("إزالة", fontWeight = FontWeight.Bold, color = DangerRed) }
+            },
+            dismissButton = { TextButton(onClick = { confirmRemovePin = false }) { Text("تراجع") } }
         )
     }
 }

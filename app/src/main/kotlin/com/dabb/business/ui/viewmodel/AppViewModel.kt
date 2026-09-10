@@ -553,7 +553,8 @@ payDao.insertValidated(
      */
     private fun validateBackupFile(file: File): String? {
         if (!file.exists() || file.length() == 0L) return "ملف النسخة الاحتياطية فارغ"
-        return try {
+        // فحوص سريعة: سلامة الملف + الإصدار + أسماء الجداول
+        val quick = try {
             android.database.sqlite.SQLiteDatabase
                 .openDatabase(file.path, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY)
                 .use { db ->
@@ -581,6 +582,47 @@ payDao.insertValidated(
                 }
         } catch (e: Exception) {
             "الملف المحدد ليس قاعدة بيانات صالحة"
+        }
+        quick?.let { return it }
+        // فحوص الأسماء السريعة نجحت — يبقى الفحص الجوهري (العيب 4②)
+        return probeWithRoom(file)
+    }
+
+    /**
+     * العيب 4② (تقرير 2026-09-10): فحص أسماء الجداول لا يكفي — ملف بالجداول
+     * الستة وبعمود واحد لكل جدول كان يُقبل، ثم تفشل الهجرة بعد استبدال القاعدة
+     * الحية. هنا نفتح **نسخة مؤقتة** بـ Room نفسه: إن كان المخطط غريباً فشل
+     * فحص identity hash، وإن كان إصداراً أقدم تُنفَّذ الهجرات على النسخة،
+     * وإن كانت فارغة من أي سجل تُرفض — كله قبل لمس القاعدة الحية.
+     */
+    private fun probeWithRoom(file: File): String? {
+        val probe = File(file.path + ".probe")
+        return try {
+            file.copyTo(probe, overwrite = true)
+            val test = androidx.room.Room.databaseBuilder(
+                getApplication(), AppDatabase::class.java, probe.absolutePath
+            )
+                .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4)
+                .build()
+            try {
+                // الفتح يرقّي (1→4) ويتحقق من المخطط — أي خلل يرمي استثناء
+                val db = test.openHelper.writableDatabase
+                fun count(table: String) = db.query("SELECT COUNT(*) FROM `$table`").use { c ->
+                    if (c.moveToFirst()) c.getInt(0) else 0
+                }
+                val total = count("cylinders") + count("customers") + count("sales") +
+                    count("payments") + count("station_purchases") + count("station_payments")
+                if (total == 0) "ملف النسخة فارغ من أي سجل (لا مخزون ولا زبائن ولا عمليات)"
+                else null
+            } finally {
+                test.close()
+            }
+        } catch (e: Exception) {
+            "الملف غير صالح للاستيراد: ${e.javaClass.simpleName}"
+        } finally {
+            probe.delete()
+            File(probe.path + "-wal").delete()
+            File(probe.path + "-shm").delete()
         }
     }
 
