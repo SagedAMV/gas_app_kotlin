@@ -43,11 +43,15 @@ fun SalesHistoryScreen() {
     val viewModel: AppViewModel = sharedAppViewModel()
     val scope = rememberCoroutineScope()
     val pageSize = 100
+    // دقات الساعة الحية لـ timeAgoLocal — مثل بقية الشاشات (تعريف مفقود)
+    val nowTick = rememberNowTick()
 
     var sales by remember { mutableStateOf<List<SaleEntity>>(emptyList()) }
     var totalCount by remember { mutableIntStateOf(0) }
     var canLoadMore by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
+    // العيب 19: إرشاد صيغة التاريخ (تعريف مفقود اكتشفه البناء الفعلي)
+    var dateHint by remember { mutableStateOf<String?>(null) }
     var opError by remember { mutableStateOf<String?>(null) }
     var confirmCancel by remember { mutableStateOf<SaleEntity?>(null) }
     var refreshKey by remember { mutableIntStateOf(0) }
