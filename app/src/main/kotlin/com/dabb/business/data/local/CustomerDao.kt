@@ -43,7 +43,4 @@ interface CustomerDao {
     @Query("DELETE FROM customers WHERE id = :id")
     suspend fun deleteById(id: String): Int
 
-    /** ترقيم صفحات (إصلاح المشكلة 13). */
-    @Query("SELECT * FROM customers ORDER BY name COLLATE NOCASE ASC LIMIT :limit OFFSET :offset")
-    suspend fun getAllPaged(limit: Int, offset: Int): List<CustomerEntity>
 }

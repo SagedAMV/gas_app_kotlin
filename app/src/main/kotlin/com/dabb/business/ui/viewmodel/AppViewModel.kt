@@ -626,7 +626,7 @@ payDao.insertValidated(
             val test = androidx.room.Room.databaseBuilder(
                 getApplication(), AppDatabase::class.java, probe.absolutePath
             )
-                .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4)
+                .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4, AppDatabase.MIGRATION_4_5)
                 .build()
             try {
                 // الفتح يرقّي (1→4) ويتحقق من المخطط — أي خلل يرمي استثناء

@@ -39,7 +39,7 @@ abstract class AppDatabase : RoomDatabase() {
         private var INSTANCE: AppDatabase? = null
 
         /** رقم مخطط Room — يُستخدم في @Database وفي فحص النسخ الاحتياطية. */
-        const val VERSION = 4
+        const val VERSION = 5
 
         const val DB_NAME = "gas_db.sqlite"
 
@@ -55,7 +55,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     DB_NAME
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .build()
                 INSTANCE = instance
                 instance
@@ -155,6 +155,58 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_3_4 = object : Migration(3, 4) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE cylinders ADD COLUMN purchaseId TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
+        /**
+         * ترقية 4 → 5 (العيب 11 — دفاع في العمق على مستوى المخطط):
+         * - payments: مفتاح أجنبي نحو customers (RESTRICT) + فهرس customerId
+         *   + CHECK(amount > 0) — كانت الجداول الستة بلا مفتاح أجنبي واحد
+         *   (عدا sales) وبلا قيد CHECK واحد، وكل الدفاع في طبقة التطبيق فقط.
+         * - station_purchases: CHECK(units بين 1 و10000) + CHECK(المبالغ >= 0).
+         * المفاتيح والقيود لا تُضاف بـ ALTER ⇒ إعادة بناء الجدولين (نمط MIGRATION_2_3).
+         * ملاحظة سلامة: صف يخالف القيود الجديدة يفشل النسخ بصوت مرتفع —
+         * وهذا مقصود (فلسفة المشروع: لا فقدان بيانات صامت). بيانات التطبيق
+         * تمر كلها عبر مسارات مُتحقِّقة (insertValidated / require) فلا يحدث عملياً،
+         * والاستثناء الوحيد (نسخة تالفة مستوردة) يوقفها فحص probeWithRoom قبل الوصول هنا.
+         */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // تحصيلات يتيمة (ممكنة فقط من ملف تالف) — تنظيف قبل بناء FK
+                db.execSQL("DELETE FROM payments WHERE customerId NOT IN (SELECT id FROM customers)")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `payments_new` (" +
+                        "`id` TEXT NOT NULL, `customerId` TEXT NOT NULL, " +
+                        "`customerName` TEXT NOT NULL, `amount` INTEGER NOT NULL CHECK(`amount` > 0), " +
+                        "`paymentDate` INTEGER NOT NULL, `notes` TEXT NOT NULL, " +
+                        "PRIMARY KEY(`id`), " +
+                        "FOREIGN KEY(`customerId`) REFERENCES `customers`(`id`) " +
+                        "ON UPDATE NO ACTION ON DELETE RESTRICT)"
+                )
+                db.execSQL(
+                    "INSERT INTO payments_new (id, customerId, customerName, amount, paymentDate, notes) " +
+                        "SELECT id, customerId, customerName, amount, paymentDate, notes FROM payments"
+                )
+                db.execSQL("DROP TABLE payments")
+                db.execSQL("ALTER TABLE payments_new RENAME TO payments")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_payments_customerId` ON `payments` (`customerId`)")
+
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `station_purchases_new` (" +
+                        "`id` TEXT NOT NULL, `units` INTEGER NOT NULL " +
+                        "CHECK(`units` > 0 AND `units` <= 10000), " +
+                        "`costPerUnit` INTEGER NOT NULL CHECK(`costPerUnit` >= 0), " +
+                        "`totalAmount` INTEGER NOT NULL CHECK(`totalAmount` >= 0), " +
+                        "`amountPaid` INTEGER NOT NULL CHECK(`amountPaid` >= 0), " +
+                        "`purchaseDate` INTEGER NOT NULL, `notes` TEXT NOT NULL, " +
+                        "PRIMARY KEY(`id`))"
+                )
+                db.execSQL(
+                    "INSERT INTO station_purchases_new (id, units, costPerUnit, totalAmount, amountPaid, purchaseDate, notes) " +
+                        "SELECT id, units, costPerUnit, totalAmount, amountPaid, purchaseDate, notes FROM station_purchases"
+                )
+                db.execSQL("DROP TABLE station_purchases")
+                db.execSQL("ALTER TABLE station_purchases_new RENAME TO station_purchases")
             }
         }
     }

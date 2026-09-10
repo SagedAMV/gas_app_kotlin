@@ -303,4 +303,111 @@ class AppViewModelTest {
             store.resetPinFailures(); store.clearPin()
         }
     }
+
+    /**
+     * العيب 11 + م2 (تقرير 2026-09-10): هجرة 4→5 — إعادة بناء payments
+     * بمفتاح أجنبي + CHECK، وstation_purchases بقيود CHECK.
+     *
+     * لا exported schemas في المشروع (exportSchema=false تاريخياً) فلا يمكن
+     * MigrationTestHelper — لذا نبني قاعدة v4 يدوياً بـ SQL خام (مطابقة
+     * لما تنتجه الهجرات 1→4) ثم نفتحها بـ Room بكل الهجرات: الفتح يشغّل
+     * 4→5 ويتحقق من تطابق المخطط بالكامل — أي خلل يفشل الاختبار بصوت عالٍ.
+     */
+    @Test
+    fun migration_4_to_5_adds_fk_and_checks() = runTest {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        val name = "migration_test_${System.nanoTime()}.sqlite"
+        val file = app.getDatabasePath(name)
+        file.parentFile?.mkdirs()
+        file.delete()
+        try {
+            // ══ v4 كما تنتجه الهجرات 1→4 (قبل العيب 11) ══
+            val raw = android.database.sqlite.SQLiteDatabase.openOrCreateDatabase(file, null)
+            try {
+                raw.execSQL(
+                    "CREATE TABLE `cylinders` (`id` TEXT NOT NULL, `sizeLiters` INTEGER NOT NULL, " +
+                        "`status` TEXT NOT NULL, `acquiredFromStation` TEXT NOT NULL, " +
+                        "`acquisitionCost` INTEGER NOT NULL, `acquiredDate` INTEGER NOT NULL, " +
+                        "`soldDate` INTEGER NOT NULL DEFAULT 0, `purchaseId` TEXT NOT NULL DEFAULT '', " +
+                        "PRIMARY KEY(`id`))"
+                )
+                raw.execSQL(
+                    "CREATE TABLE `customers` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, " +
+                        "`phone` TEXT NOT NULL, `totalDebt` INTEGER NOT NULL, `totalPaid` INTEGER NOT NULL, " +
+                        "`createdAt` INTEGER NOT NULL, PRIMARY KEY(`id`))"
+                )
+                raw.execSQL(
+                    "CREATE TABLE `sales` (`id` TEXT NOT NULL, `customerId` TEXT NOT NULL, " +
+                        "`customerName` TEXT NOT NULL, `cylinderIdsJson` TEXT NOT NULL, " +
+                        "`unitsSold` INTEGER NOT NULL, `pricePerUnit` INTEGER NOT NULL, " +
+                        "`totalAmount` INTEGER NOT NULL, `amountPaid` INTEGER NOT NULL, " +
+                        "`status` TEXT NOT NULL, `saleDate` INTEGER NOT NULL, `notes` TEXT NOT NULL, " +
+                        "PRIMARY KEY(`id`), FOREIGN KEY(`customerId`) REFERENCES `customers`(`id`) " +
+                        "ON UPDATE NO ACTION ON DELETE RESTRICT)"
+                )
+                raw.execSQL("CREATE INDEX IF NOT EXISTS `index_sales_customerId` ON `sales` (`customerId`)")
+                raw.execSQL(
+                    "CREATE TABLE `payments` (`id` TEXT NOT NULL, `customerId` TEXT NOT NULL, " +
+                        "`customerName` TEXT NOT NULL, `amount` INTEGER NOT NULL, " +
+                        "`paymentDate` INTEGER NOT NULL, `notes` TEXT NOT NULL, PRIMARY KEY(`id`))"
+                )
+                raw.execSQL(
+                    "CREATE TABLE `station_purchases` (`id` TEXT NOT NULL, `units` INTEGER NOT NULL, " +
+                        "`costPerUnit` INTEGER NOT NULL, `totalAmount` INTEGER NOT NULL, " +
+                        "`amountPaid` INTEGER NOT NULL, `purchaseDate` INTEGER NOT NULL, " +
+                        "`notes` TEXT NOT NULL, PRIMARY KEY(`id`))"
+                )
+                raw.execSQL(
+                    "CREATE TABLE `station_payments` (`id` TEXT NOT NULL, `amount` INTEGER NOT NULL, " +
+                        "`paymentDate` INTEGER NOT NULL, `notes` TEXT NOT NULL, PRIMARY KEY(`id`))"
+                )
+                // بيانات يجب أن تنجو من الهجرة
+                raw.execSQL("INSERT INTO customers VALUES ('c1','زبون الاختبار','050',5000,2000,1)")
+                raw.execSQL("INSERT INTO payments VALUES ('p1','c1','زبون الاختبار',2000,10,'دفعة')")
+                raw.execSQL("INSERT INTO station_purchases VALUES ('s1',10,2000,20000,5000,20,'سحب')")
+                raw.execSQL("PRAGMA user_version = 4")
+            } finally {
+                raw.close()
+            }
+
+            // ══ الفتح بـ Room: يشغّل 4→5 ويتحقق من المخطط كاملاً ══
+            val db = androidx.room.Room.databaseBuilder(app, AppDatabase::class.java, name)
+                .addMigrations(
+                    AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3,
+                    AppDatabase.MIGRATION_3_4, AppDatabase.MIGRATION_4_5
+                )
+                .build()
+            try {
+                // البيانات نجت
+                val payments = db.paymentDao().getByCustomer("c1")
+                assertEquals(1, payments.size)
+                assertEquals(2000L, payments.first().amount)
+
+                val w = db.openHelper.writableDatabase
+                // المفتاح الأجنبي مفعّل: تحصيل لزبون وهمي يُرفض
+                val fk = runCatching {
+                    w.execSQL("INSERT INTO payments VALUES ('p_bad','ghost','x',100,1,'')")
+                }
+                assertTrue("FK يجب أن يرفض التحصيل لزبون غير موجود", fk.isFailure)
+
+                // CHECK مفعّل: كمية سالبة في سحب المحطة تُرفض
+                val chk = runCatching {
+                    w.execSQL("INSERT INTO station_purchases VALUES ('s_bad',-5,1,1,1,1,'')")
+                }
+                assertTrue("CHECK يجب أن يرفض الكمية السالبة", chk.isFailure)
+
+                // والمفتاح الأجنبي ظاهر فعلاً في المخطط
+                val fks = w.query("PRAGMA foreign_key_list(payments)").use { c ->
+                    mutableListOf<String>().also { while (c.moveToNext()) it.add(c.getString(2)) }
+                }
+                assertTrue("payments يجب أن يشير إلى customers", fks.contains("customers"))
+            } finally {
+                db.close()
+            }
+        } finally {
+            file.delete()
+            java.io.File(file.path + "-wal").delete()
+            java.io.File(file.path + "-shm").delete()
+        }
+    }
 }
