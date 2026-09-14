@@ -199,7 +199,9 @@ fun PinGate(onUnlocked: () -> Unit) {
                             animationSpec = spring(dampingRatio = 0.5f, stiffness = Spring.StiffnessMedium)
                         ) + fadeIn(tween(motionDuration(240)))
                     ) {
-                        LockBadge(unlocking, lockRemainingMs)
+                        // إصلاح فحص 2026-09-14: مقام الكسر = مدة الدرجة الحالية
+                        // (كان 60ث ثابتة — راجع تعليق SettingsStore.pinLockTotalMs)
+                        LockBadge(unlocking, lockRemainingMs, store.pinLockTotalMs())
                     }
 
                     Spacer(Modifier.height(16.dp))
@@ -288,11 +290,13 @@ private fun LiquidWaves() {
 
 /** شارة القفل الزجاجية + عدّاد دائري يفرغ أثناء القفل التدرجي (§5.1.6). */
 @Composable
-private fun LockBadge(unlocking: Boolean, lockRemainingMs: Long) {
+private fun LockBadge(unlocking: Boolean, lockRemainingMs: Long, lockTotalMs: Long) {
     Box(contentAlignment = Alignment.Center) {
-        // حلقة العدّاد التنازلي — تمتلئ عكسياً كل ثانية
+        // حلقة العدّاد التنازلي — تفرغ بانتظام على مدى درجة القفل كاملة
         if (lockRemainingMs > 0L) {
-            val fraction = (lockRemainingMs / 60000f).coerceIn(0f, 1f)
+            val fraction = if (lockTotalMs > 0L)
+                (lockRemainingMs.toFloat() / lockTotalMs.toFloat()).coerceIn(0f, 1f)
+            else 0f
             Canvas(Modifier.size(84.dp)) {
                 val stroke = 3.5.dp.toPx()
                 val inset = stroke / 2

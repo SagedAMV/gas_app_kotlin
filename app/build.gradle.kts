@@ -13,8 +13,9 @@ android {
         applicationId = "com.dabb.business"
         minSdk = 26
         targetSdk = 34
-        versionCode = 5
-        versionName = "2.2"
+        // 2.3 (فحص 2026-09-14): إصلاحات منطقية + تنظيف كود ميت + تحسينات واجهة
+        versionCode = 6
+        versionName = "2.3"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

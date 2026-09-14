@@ -56,6 +56,18 @@ class SettingsStore(context: Context) {
         return if (elapsed < lockMs) lockMs - elapsed else 0L
     }
 
+    /**
+     * إصلاح فحص 2026-09-14: إجمالي مدة القفل للدرجة الحالية (60ث/5د/30د/ساعتان).
+     * حلقة العدّاد التنازلي في شاشة القفل كانت تقسم المتبقي على 60 ثانية ثابتة،
+     * فتبقى الحلقة «ممتلئة» جامدة طوال الدرجات الأعلى (5 دقائق فأكثر).
+     */
+    fun pinLockTotalMs(): Long {
+        val fails = prefs.getInt(KEY_PIN_FAILS, 0)
+        if (fails < MAX_ATTEMPTS) return 0L
+        val tier = ((fails - MAX_ATTEMPTS) / MAX_ATTEMPTS).coerceIn(0, LOCK_LADDER.lastIndex)
+        return LOCK_LADDER[tier]
+    }
+
     /** يسجّل محاولة فاشلة ويُرجع المدة المتبقية للقفل إن تراكمت المحاولات. */
     fun registerPinFailure(now: Long = System.currentTimeMillis()): Long {
         val fails = prefs.getInt(KEY_PIN_FAILS, 0) + 1

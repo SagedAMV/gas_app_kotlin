@@ -175,7 +175,7 @@ fun CustomerDetailScreen(customerId: String, onBack: () -> Unit) {
                             actionIcon = Icons.Filled.Delete,
                             onAction = { confirmCancelSale = sale }
                         ) {
-                            SaleHistoryRow(sale, showAction = false, now = nowTick) { }
+                            SaleHistoryRow(sale, now = nowTick)
                         }
                         if (i < d.sales.lastIndex) DividerSoft()
                     }
@@ -195,7 +195,7 @@ fun CustomerDetailScreen(customerId: String, onBack: () -> Unit) {
                             actionIcon = Icons.Filled.Delete,
                             onAction = { confirmReversePayment = p }
                         ) {
-                            PaymentRow(p, showAction = false, now = nowTick) { }
+                            PaymentRow(p, now = nowTick)
                         }
                         if (i < d.payments.lastIndex) DividerSoft()
                     }
@@ -288,7 +288,7 @@ fun CustomerDetailScreen(customerId: String, onBack: () -> Unit) {
             onDismissRequest = { confirmReversePayment = null },
             shape = RoundedCornerShape(20.dp),
             title = { Text("عكس هذه الدفعة؟") },
-            text = { Text("ستُعاد قيمة ${Money.format(p.amount)} ج كدَين على الزبون (لحالة تسجيل دفعة خاطئة).") },
+            text = { Text("ستُعاد قيمة ${Money.format(p.amount)} ريال كدَين على الزبون (لحالة تسجيل دفعة خاطئة).") },
                 confirmButton = {
                     TextButton(onClick = {
                         scope.launch {
@@ -304,8 +304,9 @@ fun CustomerDetailScreen(customerId: String, onBack: () -> Unit) {
         )
     }
 
-    confirmDelete.let {
-        if (confirmDelete) AlertDialog(
+    // فحص 2026-09-14: حُذفت الـ .let{} الزائدة حول الشرط (نمط ميت)
+    if (confirmDelete) {
+        AlertDialog(
             onDismissRequest = { confirmDelete = false },
             shape = RoundedCornerShape(20.dp),
             title = { Text("حذف الزبون؟") },
@@ -338,8 +339,12 @@ private fun MiniStat(label: String, valuePiasters: Long, modifier: Modifier = Mo
     }
 }
 
+/**
+ * صف بيع في ملف الزبون — فحص 2026-09-14: حُذفت المعاملات الميتة
+ * (showAction/onCancel) — الإجراء الآن حصراً عبر السحب (SwipeableActionRow).
+ */
 @Composable
-private fun SaleHistoryRow(sale: SaleEntity, showAction: Boolean = true, now: Long = System.currentTimeMillis(), onCancel: () -> Unit) {
+private fun SaleHistoryRow(sale: SaleEntity, now: Long = System.currentTimeMillis()) {
     val paid = sale.status == SaleStatus.PAID
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically) {
@@ -353,15 +358,12 @@ private fun SaleHistoryRow(sale: SaleEntity, showAction: Boolean = true, now: Lo
             Text("${if (paid) "سدد" else "بالأجل"} · ${timeAgoLocal(sale.saleDate, now)}",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        if (showAction) IconButton(onClick = onCancel) {
-            Icon(Icons.Filled.Delete, "إلغاء البيع", tint = MaterialTheme.colorScheme.error,
-                modifier = Modifier.size(18.dp))
-        }
     }
 }
 
+/** فحص 2026-09-14: نفس تنظيف SaleHistoryRow — العكس عبر السحب فقط. */
 @Composable
-private fun PaymentRow(p: PaymentEntity, showAction: Boolean = true, now: Long = System.currentTimeMillis(), onReverse: () -> Unit) {
+private fun PaymentRow(p: PaymentEntity, now: Long = System.currentTimeMillis()) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Filled.Payments, null, tint = MaterialTheme.colorScheme.primary,
@@ -374,10 +376,6 @@ private fun PaymentRow(p: PaymentEntity, showAction: Boolean = true, now: Long =
         }
         Text("+${Money.format(p.amount)} ريال", style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.primary)
-        if (showAction) IconButton(onClick = onReverse) {
-            Icon(Icons.Filled.Delete, "عكس الدفعة", tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
-                modifier = Modifier.size(16.dp))
-        }
     }
 }
 

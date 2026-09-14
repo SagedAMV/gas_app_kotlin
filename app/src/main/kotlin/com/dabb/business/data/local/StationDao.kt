@@ -18,11 +18,8 @@ interface StationDao {
     @Query("SELECT COALESCE(SUM(totalAmount),0) FROM station_purchases")
     suspend fun getTotalPurchases(): Long
 
-    @Query("SELECT COALESCE(SUM(amountPaid),0) FROM station_purchases")
-    suspend fun getPurchasePaid(): Long
-
-    @Query("SELECT COALESCE(SUM(totalAmount),0) FROM station_purchases WHERE purchaseDate >= :from")
-    suspend fun getPurchasesSince(from: Long): Long
+    // فحص 2026-09-14: حُذفت دوال الفترة (getPurchasesSince/getPaidSince/getPurchasePaid)
+    // — لم تُستخدم في أي شاشة (التقارير تعتمد مجاميع الكل) — كود ميت
 
     @Insert
     suspend fun insertPayment(p: StationPaymentEntity)
@@ -31,11 +28,8 @@ interface StationDao {
     @Query("SELECT * FROM station_payments ORDER BY paymentDate DESC LIMIT 200")
     suspend fun getPayments(): List<StationPaymentEntity>
 
-    @Query("SELECT COALESCE(SUM(amount),0) FROM station_payments")
-    suspend fun getTotalPaid(): Long
-
-    @Query("SELECT COALESCE(SUM(amount),0) FROM station_payments WHERE paymentDate >= :from")
-    suspend fun getPaidSince(from: Long): Long
+    // فحص 2026-09-14: دالة getTotalPaid() حُذفت كذلك — بلا مستدعٍ (رصيد
+    // المحطة يُشتق مباشرة في استعلام واحد — دَين المحطة المتبقي أدناه)
 
     /** دَين المحطة المتبقي = السحوبات − ما دُفع عند السحب − التسديدات. */
     @Query(

@@ -14,8 +14,8 @@ interface SaleDao {
     @Query("SELECT * FROM sales WHERE customerId = :id ORDER BY saleDate DESC LIMIT 200")
     suspend fun getByCustomer(id: String): List<SaleEntity>
 
-    @Query("SELECT * FROM sales ORDER BY saleDate DESC")
-    suspend fun getAll(): List<SaleEntity>
+    // فحص 2026-09-14: دالة getAll() حُذفت — كل العروض صارت مرقّمة الصفحات
+    // (المشكلة 13) فلا مستدعٍ لها — كود ميت
 
     // إصلاح الخطأ 7: ‏LIMIT 100 — فترة «الشهر» بألف بيع لم تعد تُحمَّل كاملة
     @Query("SELECT * FROM sales WHERE saleDate >= :from ORDER BY saleDate DESC LIMIT 100")

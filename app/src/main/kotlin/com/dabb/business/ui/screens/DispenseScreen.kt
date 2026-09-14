@@ -7,6 +7,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+// (كل ما تحتاجه حالة نفاد المخزون أدناه مستورد سلفاً في هذا الملف)
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -156,6 +157,28 @@ fun DispenseScreen() {
                     Text("$available", style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                     Text(" أسطوانة", style = MaterialTheme.typography.labelMedium)
+                }
+            }
+
+            // تحسين 2026-09-14: حالة نفاد المخزون — بدل أن يملأ المستخدم النموذج
+            // كاملاً ثم يفاجأ بخطأ «المخزون لا يكفي» عند التأكيد، يظهر التوجيه
+            // فوراً بحركة توسّع ناعمة (حالة حدّية: المخزون = صفر)
+            AnimatedVisibility(
+                visible = available == 0,
+                enter = expandVertically(tween(motionDuration(220))) + fadeIn(tween(motionDuration(220))),
+                exit = shrinkVertically(tween(motionDuration(180))) + fadeOut(tween(motionDuration(150)))
+            ) {
+                Card(shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
+                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.Warning, null, tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Text("نفد المخزون — اسحب أسطوانات من المحطة (تبويب المخزون) قبل تسجيل أي بيع",
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            style = MaterialTheme.typography.labelLarge,
+                            modifier = Modifier.weight(1f))
+                    }
                 }
             }
 

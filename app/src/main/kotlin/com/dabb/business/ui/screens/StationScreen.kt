@@ -277,7 +277,9 @@ private fun PurchaseRow(p: StationPurchaseEntity, now: Long = System.currentTime
         }
         Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
             Text("${Money.format(p.totalAmount)} ريال", style = MaterialTheme.typography.titleSmall)
-            if (p.totalAmount - p.amountPaid > 1L)
+            // إصلاح فحص 2026-09-14: > 0L — شرط «> 1L» كان يُخفي دَيناً قيمته 1 ريال
+            // (نفس قاعدة الفحص M6 المطبقة في كل مواضع الدَّين الأخرى)
+            if (p.totalAmount - p.amountPaid > 0L)
                 Text("آجل ${Money.format(p.totalAmount - p.amountPaid)}",
                     style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
         }

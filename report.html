@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>تقرير تعديلات — دبب البترول (فحص 2026-09-14)</title>
+<style>
+:root{
+  --teal:#2A6B5E; --teal-deep:#0E4A3C; --amber:#E5A843; --bg:#F4F6F9;
+  --card:#FFFFFF; --ink:#14202B; --slate:#54677C; --red:#C0392B; --green:#2E7D5B;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:"Segoe UI",Tahoma,Arial,sans-serif;background:var(--bg);color:var(--ink);line-height:1.8}
+.hero{background:linear-gradient(160deg,var(--teal-deep),var(--teal) 70%);color:#fff;padding:56px 24px 72px;text-align:center;position:relative;overflow:hidden}
+.hero h1{font-size:clamp(24px,4vw,38px);font-weight:900;animation:rise .8s cubic-bezier(.2,.8,.2,1) both}
+.hero p{opacity:.85;margin-top:10px;animation:rise .8s .15s cubic-bezier(.2,.8,.2,1) both}
+.badge{display:inline-block;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.3);padding:4px 16px;border-radius:99px;font-size:13px;margin-bottom:16px;animation:rise .8s .05s both}
+/* موجات سائل خلفية — هوية التطبيق */
+.wave{position:absolute;bottom:-12px;right:-50%;width:200%;height:70px;background:rgba(255,255,255,.08);border-radius:45%;animation:spin 9s linear infinite}
+.wave.w2{background:rgba(255,255,255,.06);animation-duration:13s;bottom:-24px}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes rise{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+.wrap{max-width:860px;margin:-36px auto 60px;padding:0 16px}
+.card{background:var(--card);border-radius:18px;box-shadow:0 10px 30px rgba(15,30,40,.08);padding:22px 24px;margin-bottom:18px;opacity:0;transform:translateY(22px);animation:rise .7s forwards}
+.card:nth-child(1){animation-delay:.15s}.card:nth-child(2){animation-delay:.3s}
+.card:nth-child(3){animation-delay:.45s}.card:nth-child(4){animation-delay:.6s}
+.card:nth-child(5){animation-delay:.75s}.card:nth-child(6){animation-delay:.9s}
+h2{display:flex;align-items:center;gap:10px;font-size:19px;margin-bottom:6px}
+.pill{font-size:11px;font-weight:700;padding:3px 12px;border-radius:99px;white-space:nowrap}
+.p-fix{background:#FADBD8;color:var(--red)}
+.p-clean{background:#E9EEF4;color:#46689E}
+.p-ui{background:#FBE8C9;color:#8a5b00}
+.p-meta{background:#D8E3F5;color:#1E2F4E}
+.item{border-right:3px solid var(--teal);background:#FAFBFC;border-radius:10px;padding:12px 14px;margin-top:12px;transition:transform .25s,box-shadow .25s}
+.item:hover{transform:translateX(-4px);box-shadow:0 6px 18px rgba(42,107,94,.14)}
+.item b{color:var(--teal-deep)}
+.item code{background:#EEF2F6;border:1px solid #DCE3EA;border-radius:6px;padding:0 6px;font-size:12.5px;direction:ltr;display:inline-block;color:#8A2F26}
+.item .before{color:var(--red);text-decoration:line-through;font-size:12.5px}
+.item .after{color:var(--green);font-weight:700;font-size:12.5px}
+ul{margin:8px 20px 0}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px;opacity:0;animation:rise .7s .1s forwards}
+.stat{background:var(--card);border-radius:16px;padding:18px;text-align:center;box-shadow:0 8px 24px rgba(15,30,40,.07)}
+.stat .n{font-size:34px;font-weight:900;color:var(--teal);display:block}
+.stat .n.amber{color:var(--amber)}.stat .n.red{color:var(--red)}.stat .n.blue{color:#46689E}
+.stat span.l{font-size:12.5px;color:var(--slate)}
+.count{display:inline-block;min-width:1.4em}
+footer{text-align:center;color:var(--slate);font-size:13px;padding-bottom:40px}
+.pulse{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--green);margin-left:6px;animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.5);opacity:.5}}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="wave"></div><div class="wave w2"></div>
+  <span class="badge">جلسة فحص وتطوير · 2026-09-14 · الإصدار 2.3</span>
+  <h1>⛽ تقرير تعديلات تطبيق «دبب البترول»</h1>
+  <p>فحص يدوي معمّق وفق إطار التفكير الشامل — إصلاحات منطقية + تنظيف كود ميت + تحسينات واجهة</p>
+</div>
+
+<div class="wrap">
+
+  <div class="stats">
+    <div class="stat"><span class="n" data-to="3">0</span><span class="l">إصلاحات منطقية</span></div>
+    <div class="stat"><span class="n red" data-to="8">0</span><span class="l">مواضع كود ميت أُزيلت</span></div>
+    <div class="stat"><span class="n amber" data-to="4">0</span><span class="l">تحسينات واجهة/تجربة</span></div>
+    <div class="stat"><span class="n blue" data-to="12">0</span><span class="l">ملفاً تم تعديله</span></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="pill p-fix">إصلاحات منطقية</span> أخطاء وحالات حدّية اكتُشفت بالفحص اليدوي</h2>
+    <div class="item">
+      <b>① دَين 1 ريال كان يُخفى في سجل المحطة</b><br>
+      شرط عرض شارة «آجل» كان <span class="before"><code>&gt; 1L</code></span> فأصبح <span class="after"><code>&gt; 0L</code></span> —
+      نفس قاعدة الفحص M6 المطبقة في كل مواضع الدَّين الأخرى، لكنها نُسيت في صف السحوبات.
+    </div>
+    <div class="item">
+      <b>② حلقة العدّاد التنازلي لقفل PIN كانت تتجمد</b><br>
+      سلّم القفل التدرجي يصعد حتى ساعتين، لكن الحلقة كانت تقسم المتبقي على 60 ثانية ثابتة فتبقى
+      «ممتلئة» جامدة في الدرجات العليا. أُضيفت <code>SettingsStore.pinLockTotalMs()</code> وصارت
+      الحلقة تفرغ بانتظام على مدى درجة القفل كاملة.
+    </div>
+    <div class="item">
+      <b>③ خطأ إملائي في حوار عكس الدفعة</b><br>
+      رسالة المستخدم كانت تعرض <span class="before">«… ج كدَين»</span> — حرف زائد ومفقودة كلمة
+      <span class="after">«ريال»</span>. تُعرض الآن الرسالة الصحيحة كاملة.
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span class="pill p-clean">فحص يدوي</span> كود ميت أُزيل (دوال لا تخدم التطبيق)</h2>
+    <ul>
+      <li><b>18 استيراداً غير مستخدم</b> في <code>MainActivity.kt</code> — بقايا الشريط السفلي القديم قبل «المؤشر السائل».</li>
+      <li><b>7 دوال DAO بلا أي مستدعٍ:</b> <code>CylinderDao.getAll</code>، <code>PaymentDao.getAll</code>، <code>SaleDao.getAll</code>، و<code>StationDao.getPurchasesSince / getPaidSince / getPurchasePaid / getTotalPaid</code>.</li>
+      <li><b>4 مكونات واجهة لم تُستدعَ قط:</b> <code>AnimatedStat</code>، <code>ExpandableDetailCard</code>، <code>DangerButton</code>، <code>GhostButton</code>.</li>
+      <li><b>معاملات ميتة</b> في صفوف ملف الزبون (<code>showAction / onCancel / onReverse</code>) — الإجراء صار حصراً عبر السحب <code>SwipeableActionRow</code>.</li>
+      <li><b>نمط زائد</b> <code>confirmDelete.let { if (confirmDelete) … }</code> بُسّط إلى شرط مباشر.</li>
+      <li><b>استيرادات ميتة</b> في <code>SalesHistoryScreen.kt</code> (منها استيراد مكوّن محذوف).</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2><span class="pill p-ui">تحسينات الواجهة</span> معالجة حالات حدّية بتجربة أوضح</h2>
+    <div class="item">
+      <b>① إنذار المخزون المنخفض</b> — شريط كهرماني ينبثق بحركة توسّع نابضية عندما يتبقى ≤ 5 أسطوانات،
+      ويتحول أحمر عند النفاد. قابل للتصرف: ضغطة واحدة تفتح حوار «السحب من المحطة».
+    </div>
+    <div class="item">
+      <b>② حالة نفاد المخزون في شاشة الصرف</b> — بدل أن يملأ المستخدم النموذج كاملاً ثم يفاجأ
+      بخطأ «المخزون لا يكفي» عند التأكيد، يظهر التوجيه فوراً عند فتح الشاشة.
+    </div>
+    <div class="item">
+      <b>③ توحيد شارات الحالة</b> — صف «آخر الحركات» يستخدم الآن مكوّن <code>StatusPill</code>
+      (لون متحرك بسلاسة) بدل النص اليدوي المكرر — اتساق بصري مع نظام التصميم.
+    </div>
+    <div class="item">
+      <b>④ الإصدار</b> — <code>versionName 2.3</code> و<code>versionCode 6</code> لتمييز هذه الدفعة.
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span class="pill p-meta">المنهجية</span> كيف طُبّق إطار «تفكير»؟</h2>
+    <ul>
+      <li><b>فهم الطلب ←</b> قراءة كل ملفات المنطق (744 سطر ViewModel + 6 DAOs + 10 شاشات) قبل أي تعديل.</li>
+      <li><b>التقسيم ←</b> منطق مالي (معاملات ذرّية بالقروش) / مخزون (FIFO) / زبائن / محطة / إعدادات وأمان.</li>
+      <li><b>التحليل العكسي ←</b> «كيف يفشل هذا؟» لكل شاشة: دَين = 1 ريال، قفل 5 دقائق، مخزون = صفر…</li>
+      <li><b>التأكد ←</b> فحص مراجع كل رمز محذوف قبل حذفه + توازن أقواس كل ملف معدل + جوهر المنطق المالي لم يُمس.</li>
+      <li><b>السلامة ←</b> الاختبارات الآلية القائمة (<code>AppViewModelTest</code>) ما تزال تغطي التدفق الجوهري بلا تغيير.</li>
+    </ul>
+    <p style="margin-top:10px;font-size:14px"><span class="pulse"></span>جوهر منطق التطبيق (البيع/التحصيل/الإلغاء داخل معاملات ذرّية) لم يُعدَّل — التصحيحات على الحواف فقط.</p>
+  </div>
+
+  <footer>أُنشئ آلياً في جلسة الفحص · مستودع gas_app_kotlin · لا تحذف تعليمات المستودع</footer>
+</div>
+
+<script>
+// عدّادات تصاعدية — نفس روح «العداد الميكانيكي» في التطبيق
+document.querySelectorAll('.stat .n').forEach(function(el){
+  var to=+el.dataset.to, t0=null;
+  function step(ts){ if(!t0)t0=ts; var p=Math.min((ts-t0)/900,1);
+    el.textContent=Math.round(to*(0.2*p+0.8*p*p)); if(p<1)requestAnimationFrame(step);}
+  setTimeout(function(){requestAnimationFrame(step)},600);
+});
+</script>
+</body>
+</html>

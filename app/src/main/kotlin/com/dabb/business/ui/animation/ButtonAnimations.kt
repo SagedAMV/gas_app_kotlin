@@ -55,8 +55,6 @@ import kotlinx.coroutines.delay
 /**
  * عائلة الأزرار الحركية — دليل إعادة التصميم §7.1:
  *  - GlowingButton: إجراء رئيسي إيجابي + توهّج حافة متحرك بطيء + تحويل لمؤشر تحميل
- *  - DangerButton: حذف/إلغاء — تأكيد ثانٍ بقلب نص الزر بدل حوار منفصل
- *  - GhostButton: إجراء ثانوي — بلا scale (يبقي التركيز على الزر الأساسي)
  *  - IconPulseButton: أيقونات متكررة (+/-، بحث) — نبضة 120ms + لمس لمسي
  */
 
@@ -169,106 +167,8 @@ fun GlowingButton(
     }
 }
 
-/** زر الخطر — تأكيد ثانٍ بقلب النص (AnimatedContent) بدل حوار منفصل. */
-@Composable
-fun DangerButton(
-    label: String,
-    confirmLabel: String,
-    onConfirmed: () -> Unit,
-    modifier: Modifier = Modifier,
-    icon: ImageVector? = null,
-    autoResetMs: Long = 2500
-) {
-    var armed by remember { mutableStateOf(false) }
-    val haptic = LocalHapticFeedback.current
-    // تسليح مؤقت: يعود تلقائياً إن لم يُؤكَّد
-    LaunchedEffect(armed) {
-        if (armed) {
-            delay(autoResetMs)
-            armed = false
-        }
-    }
-    val container by androidx.compose.animation.animateColorAsState(
-        targetValue = if (armed) MaterialTheme.colorScheme.error
-        else MaterialTheme.colorScheme.error.copy(alpha = 0.10f),
-        animationSpec = tween(motionDuration(220)),
-        label = "dangerBg"
-    )
-    val fg by androidx.compose.animation.animateColorAsState(
-        targetValue = if (armed) Color.White else MaterialTheme.colorScheme.error,
-        animationSpec = tween(motionDuration(220)),
-        label = "dangerFg"
-    )
-    val shake = remember { androidx.compose.animation.core.Animatable(0f) }
-    LaunchedEffect(armed) {
-        if (armed) shake.animateTo(0f, Motion.errorShake())
-    }
-
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(48.dp)
-            .graphicsLayer { translationX = shake.value }
-            .clip(RoundedCornerShape(14.dp))
-            .background(container)
-            .clickable {
-                if (armed) { armed = false; onConfirmed() }
-                else { armed = true; haptic.performHapticFeedback(HapticFeedbackType.LongPress) }
-            }
-            .padding(horizontal = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center
-    ) {
-        if (icon != null) {
-            Icon(icon, null, tint = fg, modifier = Modifier.size(17.dp))
-            Spacer(Modifier.width(6.dp))
-        }
-        AnimatedContent(
-            targetState = armed,
-            transitionSpec = {
-                (fadeIn(tween(motionDuration(160))) + scaleIn(initialScale = 0.9f,
-                    animationSpec = tween(motionDuration(160)))) togetherWith
-                    fadeOut(tween(motionDuration(120)))
-            },
-            label = "dangerText"
-        ) { isArmed ->
-            Text(
-                if (isArmed) confirmLabel else label,
-                color = fg,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold
-            )
-        }
-    }
-}
-
-/** زر شبحي ثانوي — خلفية شفافة تظهر عند الضغط فقط، بلا scale ملحوظ. */
-@Composable
-fun GhostButton(
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val bg by androidx.compose.animation.animateColorAsState(
-        targetValue = if (isPressed) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)
-        else Color.Transparent,
-        animationSpec = tween(motionDuration(Motion.MICRO)),
-        label = "ghostBg"
-    )
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(bg)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null
-            ) { onClick() }
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        contentAlignment = Alignment.Center
-    ) { content() }
-}
+// فحص 2026-09-14: حُذف DangerButton وGhostButton — لم تستدعِهما أي شاشة
+// (تأكيدات الحذف تستخدم حوارات AlertDialog القائمة) — كود ميت
 
 /** زر أيقونة نابض — نبضة 120ms عند كل ضغطة + Haptic tick (إحساس ميكانيكي). */
 @Composable

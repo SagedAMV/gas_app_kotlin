@@ -20,9 +20,6 @@ interface CylinderDao {
     @Query("SELECT COUNT(*) FROM cylinders WHERE status = 'SOLD'")
     suspend fun getSoldCount(): Int
 
-    @Query("SELECT * FROM cylinders")
-    suspend fun getAll(): List<CylinderEntity>
-
     // إصلاح الخطأ 1: ‏ORDER BY مطابق لترتيب markSoldByQuantity — فلا تُسجَّل في
     // cylinderIdsJson معرفات مختلفة عن الأسطوانات المُعلَّمة SOLD فعلياً.
     @Query("SELECT * FROM cylinders WHERE status = 'AVAILABLE' ORDER BY acquiredDate ASC, id ASC LIMIT :limit")

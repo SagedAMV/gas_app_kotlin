@@ -62,7 +62,7 @@ import androidx.compose.ui.unit.dp
  *  - Modifier.animatedFocusBorder() : إطار تركيز يتحول لوناً وسماكة
  *  - Modifier.entryTilt() : دوران Y خفيف عند أول ظهور (صفوف السجلات)
  *  - Modifier.errorFlash() : حد أحمر يومض ثم يتلاشى خلال ثانيتين
- *  - StatTile / ExpandableDetailCard : توحيد البلاطات والبطاقات القابلة للتوسيع
+ *  - StatTile : بلاطة إحصائية موحّدة بدخول متحرك وعدّاد داخلي
  */
 
 /** سرعة الظهور المتتابع — §7.3. */
@@ -228,36 +228,8 @@ fun AnimatedProgressBar(
     }
 }
 
-/** إحصائية: رقم يعدّ تصاعدياً + مؤشر نبض اختياري بشدة متغيرة. */
-@Composable
-fun AnimatedStat(
-    value: Int,
-    label: String,
-    modifier: Modifier = Modifier,
-    valueColor: Color = Color(0xFF2A6B5E),
-    pulse: Boolean = false,
-    pulseIntensity: Float = 1f
-) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            if (pulse) {
-                BreathingIndicator(size = 10.dp, intensity = pulseIntensity)
-            }
-            AnimatedNumber(
-                value = value,
-                style = MaterialTheme.typography.headlineMedium,
-                color = valueColor
-            )
-        }
-        Text(text = label, style = MaterialTheme.typography.bodyMedium)
-    }
-}
+// فحص 2026-09-14: مكوّن AnimatedStat حُذف — لم تستخدمه أي شاشة
+// (بلاطات التقارير تستخدم StatTile أدناه مباشرة) — كود ميت
 
 /**
  * بلاطة إحصائية موحّدة (§7.2): دخول CardEnter + عدّاد داخلي + نبض اختياري.
@@ -298,38 +270,8 @@ fun StatTile(
     }
 }
 
-/**
- * بطاقة قابلة للتوسيع — تفاصيل القراءة بلا حوار منفصل (§7.2):
- * النقر على الترويسة يوسّع التفاصيل بـ expandVertically(spring).
- */
-@Composable
-fun ExpandableDetailCard(
-    header: @Composable () -> Unit,
-    details: @Composable () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    var expanded by remember { mutableStateOf(false) }
-    Column(
-        modifier
-            .clip(RoundedCornerShape(14.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .clickable { expanded = !expanded }
-    ) {
-        Box(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) { header() }
-        AnimatedVisibility(
-            visible = expanded,
-            enter = expandVertically(
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
-                    stiffness = Spring.StiffnessMediumLow
-                )
-            ),
-            exit = shrinkVertically(tween(motionDuration(Motion.SHEET_OUT)))
-        ) {
-            Box(Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) { details() }
-        }
-    }
-}
+// فحص 2026-09-14: مكوّن ExpandableDetailCard حُذف — استورده ملف واحد
+// (سجل المبيعات) ولم يُستدعَ فيه قط — كود ميت
 
 /**
  * إطار تركيز متحرك (§7.7): اللون والسماكة يتحولان بحركة عند اكتساب التركيز.

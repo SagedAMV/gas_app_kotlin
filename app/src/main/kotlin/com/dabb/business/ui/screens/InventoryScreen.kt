@@ -6,6 +6,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -21,6 +23,7 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -44,6 +47,7 @@ import com.dabb.business.ui.animation.LiquidFillGauge
 import com.dabb.business.ui.animation.Motion
 import com.dabb.business.ui.animation.SkeletonCard
 import com.dabb.business.ui.animation.StaggeredReveal
+import com.dabb.business.ui.animation.StatusPill
 import com.dabb.business.ui.animation.errorFlash
 import com.dabb.business.ui.animation.motionDuration
 import com.dabb.business.ui.animation.motionLoopsAllowed
@@ -181,6 +185,44 @@ fun InventoryScreen(
                 }
             }
 
+            // تحسين 2026-09-14: إنذار مخزون منخفض/نافد — حالة حدّية كانت تُكتشف
+            // متأخراً عند محاولة البيع. التنبيه قابل للتصرف: ضغطة واحدة تفتح السحب.
+            AnimatedVisibility(
+                visible = available <= 5,
+                enter = expandVertically(tween(motionDuration(220))) + fadeIn(tween(motionDuration(220))),
+                exit = shrinkVertically(tween(motionDuration(180))) + fadeOut(tween(motionDuration(150)))
+            ) {
+                val empty = available == 0
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
+                        .background(
+                            if (empty) MaterialTheme.colorScheme.errorContainer
+                            else MaterialTheme.colorScheme.secondaryContainer
+                        )
+                        .clickable { intakeError = null; showIntake = true }
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Filled.Warning, null,
+                        tint = if (empty) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            if (empty) "نفد المخزون — لا توجد أسطوانات للصرف"
+                            else "تنبيه انخفاض المخزون — $available أسطوانات فقط متبقية",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = if (empty) MaterialTheme.colorScheme.onErrorContainer
+                            else MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                        Text("اضغط هنا للسحب من المحطة فوراً",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = (if (empty) MaterialTheme.colorScheme.onErrorContainer
+                            else MaterialTheme.colorScheme.onSecondaryContainer).copy(alpha = 0.75f))
+                    }
+                }
+            }
+
             // §6.1: شريط علوي ينزلق ثم يتقلّص لشارة صغيرة (تحوّل حجم لا اختفاء مفاجئ)
             AnimatedVisibility(
                 visible = showAdded,
@@ -310,10 +352,11 @@ private fun SaleRow(sale: SaleEntity, now: Long) {
                 Text("ملاحظة: ${sale.notes}", style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
         }
-        Column(horizontalAlignment = Alignment.End) {
+        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text("${Money.format(sale.totalAmount)} ريال", style = MaterialTheme.typography.titleSmall, color = accent)
-            Text(if (paid) "مدفوع" else "متبقّي", style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            // تحسين 2026-09-14: شارة الحالة الموحّدة (النظام التصميمي) بدل نص
+            // يدوي مكرر — لون متحرك يتحول بسلاسة عند تغيّر الحالة
+            StatusPill(text = if (paid) "مدفوع" else "متبقّي", color = accent)
         }
     }
 }

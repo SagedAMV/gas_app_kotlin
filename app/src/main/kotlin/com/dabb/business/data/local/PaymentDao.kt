@@ -25,8 +25,8 @@ abstract class PaymentDao {
     @Query("SELECT * FROM payments WHERE customerId = :id ORDER BY paymentDate DESC LIMIT 200")
     abstract suspend fun getByCustomer(id: String): List<PaymentEntity>
 
-    @Query("SELECT * FROM payments ORDER BY paymentDate DESC")
-    abstract suspend fun getAll(): List<PaymentEntity>
+    // فحص 2026-09-14: دالة getAll() حُذفت — لم يكن لها أي مستدعٍ في التطبيق
+    // (كل القوائم تُجلب بزبون أو بمجاميع — كود ميت)
 
     @Query("SELECT COALESCE(SUM(amount),0) FROM payments")
     abstract suspend fun getTotalCollections(): Long
